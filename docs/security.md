@@ -12,14 +12,18 @@ promises, and where the current build stops.
 | Huge or adversarial files exhaust memory or time | Files over 1 MiB are skipped with a warning. The walk stops at depth 3, 5000 files, or 3 seconds and reports the truncation. |
 | Secrets in `.env` leak into output | `.env` is never opened. From `.env.example` / compose `environment` only variable names are kept. Tested. |
 | Secrets in `kestrel.yaml` are shown on screen | `config show` masks literal env values, URL passwords, and secret-looking `NAME=value` assignments in commands. |
-| `${VAR}` values leak | Resolution happens only when a command starts (from Phase 2). The resolved environment is never written back into the config. Error messages name missing variables, never values. |
+| `${VAR}` values leak | Resolution happens only when `watch` starts a command. The resolved environment is never written back into the config. Error messages name missing variables, never values. |
 | `init` overwrites user files | `init` refuses if either config name exists, writes with `O_EXCL`, and asks first unless `--yes` is given. |
-| Kestrel touches processes it didn't start | Nothing in this build starts or signals processes. From Phase 2, signals go only to process groups Kestrel created. |
+| Kestrel touches processes it didn't start | Signals go only to process groups (Windows: Job Objects) Kestrel created. Services without a `command` are probed, never started or signalled. `status` reports leftover PIDs from a crashed session but never signals them. |
+| Supervised processes outlive Kestrel | Ctrl-C stops every group (SIGTERM, grace, SIGKILL) and tests assert zero survivors. On Linux the group leader also gets `Pdeathsig`, so it dies if Kestrel is killed with `kill -9`. On macOS a `kill -9` of Kestrel can leave services running. Windows Job Objects use KILL_ON_JOB_CLOSE. |
+| Secrets in process output reach the terminal | Every line is redacted before it's printed or emitted as JSON: private keys (including multi-line blocks), JWTs, URL credentials, provider key prefixes, bearer/basic auth, auth/cookie headers, secret-named `key=value` pairs, plus `redaction.extra_patterns`. Tested with `fakesvc --secrets`. |
+| Hostile log content (`rm -rf ~`, prompt injection, terminal escapes) | Log text is only ever data: it's never executed, never used to build commands, and never read as instructions. ANSI/OSC sequences and other control characters are stripped before printing, so output can't drive your terminal. Tested with `fakesvc --hostile`. |
+| Log floods exhaust memory | The collector buffer is bounded (10,000 events / ~8 MiB). Only debug/info lines are dropped, and every drop is reported. Measured: a 50 MB/min flood with a slow reader plateaus at ~47 MiB RSS. |
 
 ## Not yet in place
 
-- **Log redaction** (`internal/privacy`) arrives with persistence (Phase 3), and runs before anything is
-  stored or printed. Nothing is persisted before then.
+- **Persistence** (Phase 3) will run the same redactor before anything is written. The only file a session
+  writes today is the live status file (names, PIDs, states).
 - **Exec policy for `verify`** (`--allow-exec`, confirmation showing command, directory, and timeout) arrives
   in Phase 5.
 
@@ -30,5 +34,7 @@ promises, and where the current build stops.
 - The `.gitignore` matcher covers the common syntax (negation, anchoring, `**`, character classes) but not
   every corner of git's behavior. A mismatch makes Kestrel read a few extra manifests. It never causes writes
   or execution.
-- Log content will always be treated as inert data: never executed, never used to build shell commands, never
-  read as instructions.
+- On Windows, a process the child spawns in the instant before it is assigned to its Job Object isn't contained.
+  That window is a few milliseconds after start.
+- `run` executes the argv you give it directly. `watch` runs each configured `command` through `/bin/sh -c`
+  (`cmd.exe /C` on Windows), because that's what config commands are: shell lines you wrote.

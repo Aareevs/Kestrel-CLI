@@ -15,8 +15,8 @@ we are executing it, the decisions made along the way, and the risks we are watc
 | # | Phase | Exit criterion | Status |
 |---|---|---|---|
 | 1 | Foundation: module, cobra CLI, config load/validate, discovery, `inspect`, `init`, `config`, `doctor`, `version`, Makefile, CI, README | `kestrel inspect` correct on ≥3 fixture projects (Node, Go, compose) with golden tests | done (see PROGRESS.md) |
-| 2 | Supervision: process groups, collectors, backpressure, probes, `run`, `watch`, `status`; `tests/fakesvc` | 3 fakesvc under `watch`, Ctrl-C → zero children (tested); 50 MB/min flood → bounded RSS (measured) | planned |
-| 3 | Persistence: SQLite, migrations, log segments, sessions, retention, `cleanup`, `sessions`; `privacy` package | session persisted/listed/shown/exported (redacted)/deleted; retention test | planned |
+| 2 | Supervision: process groups, collectors, backpressure, probes, `run`, `watch`, `status`; `tests/fakesvc` | 3 fakesvc under `watch`, Ctrl-C → zero children (tested); 50 MB/min flood → bounded RSS (measured) | done (see PROGRESS.md) |
+| 3 | Persistence: SQLite, migrations, log segments, sessions, retention, `cleanup`, `sessions` | session persisted/listed/shown/exported (redacted)/deleted; retention test | planned |
 | 4 | Correlation + diagnosis: graph, incidents, timeline, rules, `timeline`, `diagnose` | Scenarios A, B, C, D, I golden; every hypothesis has evidence IDs | planned |
 | 5 | Verification: `verify`, stability window, authorized exec, before/after | Scenario E; exec refused without authorization (tested) | planned |
 | 6 | MCP server (read-only, reuses `internal/app`) | test client retrieves real diagnosis; redaction verified | planned |
@@ -60,6 +60,17 @@ we are executing it, the decisions made along the way, and the risks we are watc
 - **`doctor` is read-mostly**: it probes writability with a temp file and removes it; it does not create the
   data directory.
 - **Exit codes** per spec; `doctor` with a failing check exits `4`.
+
+## Phase 2 decisions
+
+- **Redaction moved up from Phase 3.** Phase 2 prints process output, and the spec requires redaction before
+  anything is printed.
+- **Readiness waits are bounded, then the service starts anyway.** If a dependency never becomes ready, its
+  dependents still start (with a warning), so the downstream symptoms Phase 4 needs for diagnosis actually
+  happen.
+- **The live status file is temporary.** It's a minimal JSON file for `status` until SQLite sessions exist.
+- **Shutdown is parallel.** Stopping in reverse dependency order would cost N × grace when several services
+  ignore SIGTERM. Parallel stops are bounded by a single grace period.
 
 ## Risks
 
