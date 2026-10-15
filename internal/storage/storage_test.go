@@ -465,6 +465,49 @@ func TestDeleteSession(t *testing.T) {
 	}
 }
 
+func TestVerificationsAreKeptWithTheirSession(t *testing.T) {
+	clk := newClock()
+	s, _ := openStore(t, Options{Now: clk.now})
+	id := ulid(8)
+	record(t, s, id, clk.now(), events(id, clk.now(), 3, func(i int) string { return "x" }))
+	sum, _, err := s.GetSession(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, v := range []api.Verdict{api.VerdictStillFailing, api.VerdictResolved} {
+		start := clk.now().Add(time.Duration(i) * time.Minute)
+		rep := &api.VerificationReport{ID: fmt.Sprintf("01TESTVERIFY%014d", i), Session: &sum, Incident: &api.Incident{Number: 2},
+			StartedAt: start, EndedAt: start.Add(30 * time.Second), Window: "30s", Verdict: v, Reasons: []string{"why"}}
+		if err := s.SaveVerification(ctx, rep); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SaveVerification(ctx, &api.VerificationReport{ID: "x"}); err == nil {
+		t.Fatal("a verification without a session must be refused")
+	}
+	vs, err := s.Verifications(ctx, id)
+	if err != nil || len(vs) != 2 || vs[1].Verdict != api.VerdictResolved || vs[1].Incident != 2 || vs[1].Window != "30s" ||
+		vs[1].EndedAt.Sub(vs[1].StartedAt) != 30*time.Second {
+		t.Fatalf("%v %+v", err, vs)
+	}
+	full, err := s.Verification(ctx, vs[1].ID)
+	if err != nil || full.Verdict != api.VerdictResolved || full.Reasons[0] != "why" || full.Session.ID != id {
+		t.Fatalf("%v %+v", err, full)
+	}
+	if _, err := s.Verification(ctx, "nope"); err == nil {
+		t.Fatal("missing verification")
+	}
+	// Deleting the session deletes its verifications.
+	if _, err := s.DeleteSession(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	s.db.QueryRow(`SELECT COUNT(*) FROM verifications`).Scan(&n)
+	if n != 0 {
+		t.Fatalf("%d verifications outlived their session", n)
+	}
+}
+
 // TestRetention is the Phase 3 retention criterion.
 func TestRetentionByAgeAndSize(t *testing.T) {
 	clk := newClock()

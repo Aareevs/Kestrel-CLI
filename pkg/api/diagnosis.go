@@ -164,4 +164,6 @@ type TimelineReport struct {
 	Service       string          `json:"service,omitempty"`
 	Since         time.Time       `json:"since,omitzero"`
 	Events        []TimelineEntry `json:"events,omitempty"` // with --service: that service's key events
+	// Verifications are the `kestrel verify` runs against this session.
+	Verifications []VerificationSummary `json:"verifications"`
 }

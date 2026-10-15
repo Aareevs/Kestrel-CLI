@@ -20,6 +20,7 @@ const tailLines = 30
 type analysis struct {
 	store     *storage.Store
 	summary   api.SessionSummary
+	topo      api.Topology
 	events    []api.Event
 	graph     *graph.Graph
 	incidents []*correlation.Incident
@@ -44,23 +45,31 @@ func (a *App) analyze(ctx context.Context, ref string, all bool) (*analysis, err
 		st.Close()
 		return nil, err
 	}
-	sum, _, err := st.GetSession(ctx, id)
+	an, err := a.load(ctx, st, id)
 	if err != nil {
 		st.Close()
+		return nil, err
+	}
+	return an, nil
+}
+
+// load correlates session id from an open store (which the caller keeps
+// owning).
+func (a *App) load(ctx context.Context, st *storage.Store, id string) (*analysis, error) {
+	sum, _, err := st.GetSession(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 	topo, err := st.Topology(ctx, id)
 	if err != nil {
-		st.Close()
 		return nil, err
 	}
 	evs, err := st.DiagnosticEvents(ctx, id)
 	if err != nil {
-		st.Close()
 		return nil, err
 	}
 	g := graph.Build(topo, evs)
-	return &analysis{store: st, summary: sum, events: evs, graph: g, incidents: correlation.Correlate(evs, g, a.window())}, nil
+	return &analysis{store: st, summary: sum, topo: topo, events: evs, graph: g, incidents: correlation.Correlate(evs, g, a.window())}, nil
 }
 
 // tails fetches, per member of an incident, the output leading up to its
@@ -166,6 +175,9 @@ func (a *App) Timeline(ctx context.Context, ref string, all bool, o TimelineOpti
 			return nil, err
 		}
 		rep.Events = serviceEntries(evs, cutoff)
+	}
+	if rep.Verifications, err = an.store.Verifications(ctx, an.summary.ID); err != nil {
+		return nil, err
 	}
 	for _, in := range an.incidents {
 		if !cutoff.IsZero() && in.End.Before(cutoff) {

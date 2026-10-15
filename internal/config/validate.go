@@ -178,6 +178,15 @@ func validate(c *Config, doc *yaml.Node, projectRoot string) []Issue {
 			if ch.Timeout < 0 {
 				v.add(append(at, "timeout"), label+".timeout", "must be positive")
 			}
+			if ch.Dir != "" && projectRoot != "" {
+				d := ch.Dir
+				if !filepath.IsAbs(d) {
+					d = filepath.Join(projectRoot, d)
+				}
+				if fi, err := os.Stat(d); err != nil || !fi.IsDir() {
+					v.add(append(at, "dir"), label+".dir", "directory %q does not exist", ch.Dir)
+				}
+			}
 		case "":
 			v.add(at, label+".type", "required (%q or %q)", CheckProbe, CheckCommand)
 		default:

@@ -22,6 +22,11 @@ type SinkFunc func(api.Event)
 
 func (f SinkFunc) Emit(ev api.Event) { f(ev) }
 
+// DefaultRepeatWindow is the longest run of identical lines folded into one
+// summary event: a steadily repeating error produces an event at least this
+// often.
+const DefaultRepeatWindow = 10 * time.Second
+
 // Options configure a Collector. Zero values take defaults.
 type Options struct {
 	MaxLine      int           // longest line kept intact (default 16 KiB)
@@ -43,7 +48,7 @@ func (o *Options) defaults() {
 		o.MaxBytes = 8 << 20
 	}
 	if o.RepeatWindow <= 0 {
-		o.RepeatWindow = 10 * time.Second
+		o.RepeatWindow = DefaultRepeatWindow
 	}
 	if o.RepeatIdle <= 0 {
 		o.RepeatIdle = time.Second

@@ -143,6 +143,15 @@ func TestParseErrors(t *testing.T) {
 	}
 }
 
+func TestMissingVerifyCommandDir(t *testing.T) {
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "backend"), 0o755)
+	_, err := Parse("k.yaml", []byte("version: 1\nverify:\n  checks:\n    - {type: command, run: x, dir: ./backend}\n    - {type: command, run: x, dir: ./nope}\n"), root)
+	if err == nil || !strings.Contains(err.Error(), `line 5: verify.checks[1].dir: directory "./nope" does not exist`) || strings.Contains(err.Error(), "checks[0]") {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestMissingServiceDir(t *testing.T) {
 	root := t.TempDir()
 	_, err := Parse("k.yaml", []byte("version: 1\nservices:\n  - name: a\n    dir: ./nope\n    command: x\n"), root)
