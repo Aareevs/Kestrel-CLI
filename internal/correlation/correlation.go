@@ -167,6 +167,17 @@ func (in *Incident) finish(events []api.Event, g *graph.Graph) {
 	in.Timeline = in.timeline(events)
 }
 
+// wasDownBefore reports whether svc itself crashed, timed out starting, or
+// failed its probe before seq.
+func (in *Incident) wasDownBefore(svc string, seq uint64) bool {
+	for _, e := range in.ByService[svc] {
+		if e.Seq < seq && (e.Type == api.EventProcessCrashed || e.Type == api.EventStartupTimeout || e.Type == api.EventProbeFailed) {
+			return true
+		}
+	}
+	return false
+}
+
 func (in *Incident) isRoot(svc string) bool {
 	for _, r := range in.Roots {
 		if r == svc {
@@ -230,14 +241,21 @@ func (in *Incident) timeline(events []api.Event) []api.TimelineEntry {
 		lastByService[e.ServiceID], lastFP[e.ServiceID] = len(out)-1, e.Fingerprint
 	}
 
-	// Recovery: a member's probe passing again after that member's own first
-	// anomaly. (A service that only became ready, having never failed, did
-	// not recover from anything.)
+	// Recovery: a member passing again after it was itself down. That is a
+	// probe_recovered, or a probe_ready after the member's own crash, startup
+	// timeout, or probe failure. A first-ever ready that merely happens after
+	// a connection error is not a recovery from anything.
 	for _, e := range events {
-		first, member := in.First[e.ServiceID]
-		if member && e.Seq > first.Seq && (e.Type == api.EventProbeRecovered || e.Type == api.EventProbeReady) {
-			out = append(out, entry(e, api.RoleRecovery, api.ClaimObserved))
+		if !in.has(e.ServiceID) || e.Seq <= in.First[e.ServiceID].Seq {
+			continue
 		}
+		switch {
+		case e.Type == api.EventProbeRecovered:
+		case e.Type == api.EventProbeReady && in.wasDownBefore(e.ServiceID, e.Seq):
+		default:
+			continue
+		}
+		out = append(out, entry(e, api.RoleRecovery, api.ClaimObserved))
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Seq < out[j].Seq })
 	return out

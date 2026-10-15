@@ -166,6 +166,27 @@ func TestEarlierDownstreamFailureMakesTwoRoots(t *testing.T) {
 	}
 }
 
+func TestFirstReadyAfterAConnectionErrorIsNotRecovery(t *testing.T) {
+	s := newStream()
+	s.started(0, "web")
+	s.refused(10, "web", 8080) // its first connection attempt races its first probe
+	s.ready(20, "web")
+	in := Correlate(s.evs, graph.Build(topo3, s.evs), 0)[0]
+	for _, e := range in.Timeline {
+		if e.Role == api.RoleRecovery {
+			t.Fatalf("first-ever ready is not a recovery: %+v", e)
+		}
+	}
+	// After its own crash, becoming ready again is.
+	s.crash(500, "web", 1)
+	s.started(600, "web")
+	s.ready(700, "web")
+	in = Correlate(s.evs, graph.Build(topo3, s.evs), 0)[0]
+	if got := roles(in); !strings.HasSuffix(got, "web/recovery/probe_ready×1") {
+		t.Fatalf("timeline: %s", got)
+	}
+}
+
 func TestRecoveryAndRepeatSummaries(t *testing.T) {
 	s := newStream()
 	s.ready(0, "api")
