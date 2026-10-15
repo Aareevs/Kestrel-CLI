@@ -1,0 +1,38 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · database, api, frontend
+
+Incident #1  ·  3 services affected  ·  started hh:mm:ss  ·  correlation strong
+  Initiating failure: database (evt …<evt>)
+
+  Likely initiating failure  [hypothesis · high]
+  database failed first; api, frontend failed because of it
+    ✓ database: FATAL:  database files are incompatible with server  evt …<evt>
+    ✓ database exited with code 1  evt …<evt>
+    ✓ api: connection refused to 127.0.0.1:<database-port> ×N  evt …<evt>
+    ✓ api never became ready  evt …<evt>
+    ✓ frontend: connection refused to 127.0.0.1:<api-port> ×N  evt …<evt>
+    ✗ no contradicting evidence found
+    high because: database failed first (hh:mm:ss); api declares depends_on: [database]; frontend depends on api, which failed after database
+    rule K002-dependency-down
+
+  Other hypotheses
+  2. [hypothesis · high] database failed during startup: FATAL:  database files are incompatible with server  K004-startup-failure
+       ✓ database: FATAL:  database files are incompatible with server  evt …<evt>
+       ✓ database exited with code 1  evt …<evt>
+       ✗ no contradicting evidence found
+  3. [hypothesis · low] api failed first; frontend failed because of it  K002-dependency-down
+       ✓ api never became ready  evt …<evt>
+       ✓ frontend: connection refused to 127.0.0.1:<api-port> ×N  evt …<evt>
+       ✗ database: FATAL:  database files are incompatible with server (a dependency of api, failed earlier)  evt …<evt>
+  4. [hypothesis · low] api never became ready  K004-startup-failure
+       ✓ api never became ready  evt …<evt>
+       ✗ api: connection refused to 127.0.0.1:<database-port> (database had already failed) ×N  evt …<evt>
+
+  Downstream symptoms  [correlated]
+    api       connection errors ×N; never became ready
+    frontend  connection errors ×N
+
+  Next step
+    Check why database failed; the others are likely to recover once it does.
+    $ kestrel timeline --service database
+
+Kestrel only suggests commands; it never runs them. Full evidence: --format json

@@ -1,0 +1,7 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · web
+
+Incident #1  ·  1 service affected  ·  started hh:mm:ss  ·  correlation strong
+  Initiating failure: web (evt …<evt>)
+  <time>  web  ● started       started (pid N): <command>
+  <time>  web  ✗ first anomaly Error: listen EADDRINUSE: address already in use :::<web-port>
+  <time>  web  ✗ key           crashed (exit code 1)

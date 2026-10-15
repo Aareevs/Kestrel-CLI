@@ -1,0 +1,20 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · billing, search
+
+Incident #1  ·  2 services affected  ·  started hh:mm:ss  ·  correlation weak
+  Initiating failure: unknown. 2 services failed with no dependency or port link between them (billing, search); the initiating failure can't be determined from this evidence
+
+  Unresolved: competing hypotheses, ranked by evidence
+  1. [hypothesis · high] billing failed during startup: ERROR: could not load pricing table  K004-startup-failure
+       ✓ billing: ERROR: could not load pricing table  evt …<evt>
+       ✓ billing exited with code 1  evt …<evt>
+       ✗ no contradicting evidence found
+  2. [hypothesis · high] search failed during startup: ERROR: index directory is locked  K004-startup-failure
+       ✓ search: ERROR: index directory is locked  evt …<evt>
+       ✓ search exited with code 1  evt …<evt>
+       ✗ no contradicting evidence found
+
+  Next step
+    2 services failed independently, so the evidence can't single out one cause. Check each; start with the earliest, billing.
+    $ kestrel timeline --service billing
+
+Kestrel only suggests commands; it never runs them. Full evidence: --format json

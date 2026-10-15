@@ -1,0 +1,8 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · worker
+
+Incident #1  ·  1 service affected  ·  started hh:mm:ss  ·  correlation strong
+  Initiating failure: worker (evt …<evt>)
+  <time>  worker  ● last healthy  ready: http http://127.0.0.1:<worker-port>/health (status 200 in <dur>)
+  <time>  worker  ✗ first anomaly panic: runtime error: invalid memory address or nil pointer dereference
+  <time>  worker  ✗ key           crashed (exit code 2)
+  <time>  worker  ✗ key           not ready: http http://127.0.0.1:<worker-port>/health failed 2 times (dial 127.0.0.1:<worker-port>: connect: connec…

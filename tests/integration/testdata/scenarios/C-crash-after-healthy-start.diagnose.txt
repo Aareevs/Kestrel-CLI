@@ -1,0 +1,19 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · worker
+
+Incident #1  ·  1 service affected  ·  started hh:mm:ss  ·  correlation strong
+  Initiating failure: worker (evt …<evt>)
+
+  Likely initiating failure  [hypothesis · high]
+  worker crashed after a healthy start: panic: runtime error: invalid memory address or nil pointer dereferen…
+    ✓ worker was ready (probe passing)  evt …<evt>
+    ✓ worker: panic: runtime error: invalid memory address or nil pointer dereference  evt …<evt>
+    ✓ worker exited with code 2  evt …<evt>
+    ✗ no contradicting evidence found
+    high because: it had passed its readiness probe, so this is a runtime failure, not a startup problem; a fatal error was logged just before the exit (a Go program panicked)
+    rule K003-crash-after-start
+
+  Next step
+    Read what worker printed just before it exited.
+    $ kestrel timeline --service worker
+
+Kestrel only suggests commands; it never runs them. Full evidence: --format json
