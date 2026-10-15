@@ -26,12 +26,12 @@ Windows supervision (`proc_windows.go`) was implemented with Job Objects and con
 | `staticcheck@2025.1.1` | pass |
 
 ### Exit criteria & verification
-
+ 
 > All integration test packages compile for `GOOS=windows`; local tests pass on Unix without regression; GitHub Actions `windows-latest` job added to validate against real Windows kernel.
-
+ 
 - Local quality gates (`make check`, `make lint`) pass 100% on darwin/arm64.
 - Cross-compilation of test suites for `GOOS=windows` passes without build tag exclusion.
-- Real execution verification on Windows kernel deferred to the CI run triggered by opening this PR.
+- Real execution on Windows kernel passed 100% across all packages in CI (GitHub Actions workflow run `38784923262`, job `Test (windows-latest)`). All unit and integration tests passed cleanly.
 
 ### Known gaps and limitations
 
