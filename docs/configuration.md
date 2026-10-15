@@ -52,8 +52,8 @@ verify:
 |---|---|---|---|
 | `version` | int | required | Must be `1`. |
 | `project.name` | string | | Display name. |
-| `storage.retention_days` | int | `7` | Sessions older than this are removed (from Phase 3). |
-| `storage.max_total_mb` | int | `500` | Oldest closed sessions are removed past this size (from Phase 3). |
+| `storage.retention_days` | int | `7` | Sessions that ended longer ago than this are removed when a session ends and by `kestrel cleanup`. |
+| `storage.max_total_mb` | int | `500` | While the recorded total exceeds this, the oldest closed sessions are removed. The active session is never removed. Sizes are estimates that track real disk use closely (a test keeps them within ±15%). |
 | `correlation.window` | duration | `10s` | Time window, used only as a weak correlation signal (from Phase 4). |
 | `redaction.extra_patterns` | list of regex | `[]` | Extra patterns to redact. Must compile. |
 | `services` | list | `[]` | See below. |

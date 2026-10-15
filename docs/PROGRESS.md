@@ -1,5 +1,91 @@
 # Progress
 
+## Phase 3: Persistence (2026-10-15)
+
+### Built
+
+- `internal/storage`: SQLite via `modernc.org/sqlite` (pure Go) in WAL mode, with embedded transactional
+  migrations (`schema_migrations`), a sessions/events/segments schema indexed on `(session_id, seq)`,
+  `(session_id, service, time)` and `(session_id, type)`, and a read-only `Inspect` for `doctor` that never
+  creates files.
+- Raw logs: per-service append-only NDJSON segments, rotated at 4 MiB, gzipped when closed, indexed by seq range
+  and byte offset. SQLite keeps messages truncated to 1 KiB; the full redacted event is in the segment.
+- `Recorder`: batched transactions (256 events / 100ms). Storage failures are counted on the session as
+  `write_errors` and never stop supervision.
+- Retention (`retention_days`, `max_total_mb`) on session end and via `kestrel cleanup [--dry-run]`: oldest closed
+  sessions first, never active ones. Stale-session recovery (`interrupted`) after a killed Kestrel.
+- Commands: `sessions list|show|export|delete`, `cleanup`, global `--session`; `doctor` now checks storage.
+  `run`/`watch` print "saved as session …" and warn if storage is unavailable.
+- Redacted export: streamed, always-valid JSON, full messages restored from segments, second redaction pass.
+
+### Exit criteria
+
+> A session is persisted, listed, shown, exported (redacted), and deleted; retention test passes.
+
+Met, against the real binary (`tests/integration/sessions_test.go`):
+
+- `TestSessionPersistListShowExportDelete` runs the whole lifecycle. It also scans **every stored byte** (SQLite,
+  WAL, and decompressed segments) for the four fake secrets: none found, while the hostile lines are stored
+  verbatim as inert text. The export is checked for secrets, ordering, and completeness (`events` equals the
+  session's count, no warnings).
+- `TestRetentionOnCleanupAndSessionClose`: dry run changes nothing; `cleanup` removes the two sessions past the
+  window and keeps the third; `retention_days` from `kestrel.yaml` is honored; the same policy runs
+  automatically when a session ends. Exact size-order behavior, the active/protected rules, and "oldest first"
+  are in `internal/storage` (`TestRetentionSizeOrder`).
+
+Also tested: migration failure/rollback, a newer database is refused, permission-denied data directory, corrupt
+database (supervision unaffected, file untouched, `doctor` explains), `kill -9` recovery, write failures, partial
+last line in a segment, path traversal in the index.
+
+### Measurements
+
+- **Size accounting.** A 50 MB/min flood session was reported at 14.2 MiB but occupied 20.3 MiB on disk
+  (ratio 0.70). The per-row constant was recalibrated (200 → 330 bytes); re-measured twice at **0.98**. A test now
+  fails if the ratio leaves 0.85–1.15.
+- **Recorder throughput.** The flood (≈0.8 MB/s of lines) recorded 23k–45k events in 6–8s with a fast reader:
+  0 dropped, 0 write errors, 10–20 MiB on disk.
+- **Memory with recording on.** The 60s, 50 MB/min, slow-reader test: RSS plateaus at **65 MiB** (max 65.0,
+  avg 60.1; trajectory 60 → 61 → 65 → 65 → … → 59 → 61 → 61 MiB, flat from ~15s). Phase 2 measured 47 MiB without
+  recording, so persistence costs about 18 MiB (SQLite page cache and the recorder queue). Still bounded; the test
+  limit is 100 MiB.
+
+### Bugs found by the new tests (fixed in this PR)
+
+- **Project identity split by symlinks.** `--project /var/...` and a cwd-based lookup (`/private/var/...` on
+  macOS) gave one project two roots, so its sessions were invisible from one of them. The root is now
+  canonicalized in `app.New`.
+- **Sizes undercounted by 30%** (above).
+- **ID/prefix lookups ignored project scoping** while `last` honored it, contradicting the documented rule. All
+  forms are now scoped; `--all` widens them.
+- **A silently skipping test.** One retention test skipped half its body when its fixture was too small to
+  matter. The skip was removed and the logic moved to an exact-bytes test.
+- **A wrong assertion of mine** (session size "below raw segment bytes") replaced by an exact identity: size
+  equals sealed segment bytes plus the row estimate.
+- **A timing assumption** in a Phase 2 supervisor test (3s startup grace) failed with the full suite running in
+  parallel under load. It now uses 15s and passed 12× under 8 CPU hogs.
+
+### Quality checks (darwin/arm64, go1.26.2)
+
+| Check | Result |
+|---|---|
+| `gofmt -l .` | no output |
+| `go vet ./...` | pass, plus `GOOS=windows` vet of `internal/process` and `internal/storage` |
+| `go test ./...` | pass (11 packages) |
+| `go test -race ./...` | pass |
+| builds: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64 | pass (SQLite is pure Go, no cgo) |
+| `staticcheck@2025.1.1` | pass (it caught one unused test helper) |
+| Coverage (`-short`, `-coverpkg=./internal/...,./pkg/...`) | 84.9% of statements |
+
+### Known gaps and limitations
+
+- Stored data is **not encrypted**; it's protected by file permissions (`0700`/`0600`). Redaction is best-effort,
+  so review exports before sharing.
+- Segments are flushed to the OS but not `fsync`ed; a power loss can lose the last moments of a session.
+- Stale-session detection uses the recorded PID. If the OS reuses it for an unrelated process, that session stays
+  `active` (and is never removed) until that process exits.
+- Export holds the full text of long (>1 KiB) messages in memory while it streams; fine at these limits.
+- Windows storage and supervision compile and vet but have not been run on Windows.
+
 ## Phase 2: Supervision (2026-10-15)
 
 ### Built
@@ -83,7 +169,7 @@ them. Its limit is 100 MiB.
   `Pdeathsig`. Normal Ctrl-C/SIGTERM shutdown is tested and clean.
 - Ordering across *different* streams of one process (stdout vs. stderr) is arrival order at Kestrel, which
   can differ slightly from the order the process wrote them. That's inherent to two pipes.
-- `status` reads a small state file refreshed every 250ms. SQLite session storage replaces it in Phase 3.
+- `status` reads a small state file refreshed every 250ms. Session storage (Phase 3) is separate; the state file stays because `status` needs a cheap "what is running now" answer.
 - No automatic restarts (`restart` events are reserved).
 - Flood test RSS limits assume a non-race build of the binary, which is what the test builds.
 
@@ -144,5 +230,5 @@ The GitHub Actions workflow is written but hasn't run yet: there's no remote.
   aren't detected.
 - Compose: only the first published port per service is used. Override files (`compose.override.yaml`) and
   profiles are ignored.
-- (Resolved after this phase: MIT license added.)
+- (Resolved after Phase 2: MIT license added.)
 - `docs/assets/demo.gif` hasn't been generated (VHS isn't installed). Only the `.tape` is committed.

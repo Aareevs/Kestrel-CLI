@@ -20,17 +20,26 @@ promises, and where the current build stops.
 | Hostile log content (`rm -rf ~`, prompt injection, terminal escapes) | Log text is only ever data: it's never executed, never used to build commands, and never read as instructions. ANSI/OSC sequences and other control characters are stripped before printing, so output can't drive your terminal. Tested with `fakesvc --hostile`. |
 | Log floods exhaust memory | The collector buffer is bounded (10,000 events / ~8 MiB). Only debug/info lines are dropped, and every drop is reported. Measured: a 50 MB/min flood with a slow reader plateaus at ~47 MiB RSS. |
 
+| Secrets reach disk | Redaction runs before an event is stored, so the SQLite database, its WAL, and the gzipped segments contain only redacted text. An integration test scans every stored byte, decompressed, for the fake secrets. Export redacts again. |
+| A corrupt or newer database is "fixed" destructively | It never is. Corruption is reported (`doctor`, warnings) and the file is left byte-for-byte untouched, so you can inspect or move it. Supervision keeps working without storage. |
+| Stored paths escape the data directory | Segment paths read from the database are validated before use; `..` and absolute paths are refused. |
+| Exports overwrite files or leak via permissions | `--out` creates the file `0600`, refuses to overwrite, and removes a half-written bundle on failure. The data directory and files are created `0700`/`0600`. |
+| History grows without bound | Retention (default 7 days / 500 MB) runs when each session ends and via `kestrel cleanup`. Active sessions are never removed. |
+
 ## Not yet in place
 
-- **Persistence** (Phase 3) will run the same redactor before anything is written. The only file a session
-  writes today is the live status file (names, PIDs, states).
 - **Exec policy for `verify`** (`--allow-exec`, confirmation showing command, directory, and timeout) arrives
   in Phase 5.
 
 ## Limits
 
-- Masking and (later) redaction are pattern-based and best-effort. They lower the risk of accidental exposure;
-  they don't guarantee it can't happen.
+- Masking and redaction are pattern-based and best-effort. They lower the risk of accidental exposure; they
+  don't guarantee it can't happen. A secret in a format no pattern recognizes will be stored and exported as is,
+  so review exports before sharing them. Stored data isn't encrypted: it's protected by file permissions only.
+- Segments are flushed to the OS on every batch but not `fsync`ed, so a power loss (not a Kestrel crash) can
+  lose the last moments of a session. SQLite itself runs with WAL and `synchronous=NORMAL`.
+- Stale-session detection uses the recorded Kestrel PID. If the OS reuses that PID for an unrelated process,
+  the session stays `active` (and so is never removed) until that process exits.
 - The `.gitignore` matcher covers the common syntax (negation, anchoring, `**`, character classes) but not
   every corner of git's behavior. A mismatch makes Kestrel read a few extra manifests. It never causes writes
   or execution.

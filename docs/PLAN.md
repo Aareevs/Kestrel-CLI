@@ -16,7 +16,7 @@ we are executing it, the decisions made along the way, and the risks we are watc
 |---|---|---|---|
 | 1 | Foundation: module, cobra CLI, config load/validate, discovery, `inspect`, `init`, `config`, `doctor`, `version`, Makefile, CI, README | `kestrel inspect` correct on ≥3 fixture projects (Node, Go, compose) with golden tests | done (see PROGRESS.md) |
 | 2 | Supervision: process groups, collectors, backpressure, probes, `run`, `watch`, `status`; `tests/fakesvc` | 3 fakesvc under `watch`, Ctrl-C → zero children (tested); 50 MB/min flood → bounded RSS (measured) | done (see PROGRESS.md) |
-| 3 | Persistence: SQLite, migrations, log segments, sessions, retention, `cleanup`, `sessions` | session persisted/listed/shown/exported (redacted)/deleted; retention test | planned |
+| 3 | Persistence: SQLite, migrations, log segments, sessions, retention, `cleanup`, `sessions` | A session is persisted, listed, shown, exported (redacted), and deleted; retention test passes | done (see PROGRESS.md) |
 | 4 | Correlation + diagnosis: graph, incidents, timeline, rules, `timeline`, `diagnose` | Scenarios A, B, C, D, I golden; every hypothesis has evidence IDs | planned |
 | 5 | Verification: `verify`, stability window, authorized exec, before/after | Scenario E; exec refused without authorization (tested) | planned |
 | 6 | MCP server (read-only, reuses `internal/app`) | test client retrieves real diagnosis; redaction verified | planned |
@@ -71,6 +71,16 @@ we are executing it, the decisions made along the way, and the risks we are watc
 - **The live status file is temporary.** It's a minimal JSON file for `status` until SQLite sessions exist.
 - **Shutdown is parallel.** Stopping in reverse dependency order would cost N × grace when several services
   ignore SIGTERM. Parallel stops are bounded by a single grace period.
+
+## Phase 3 decisions
+
+- **Full text lives in segments, SQLite stays small.** Rows keep messages truncated to 1 KiB; the complete redacted
+  event is in the service's gzipped segment, addressed by segment ID and offset.
+- **Storage can fail without stopping Kestrel.** A corrupt database or unwritable data directory produces a
+  warning and an honest "not saved"; supervision is unaffected. Kestrel never repairs or deletes a corrupt file.
+- **Project scoping everywhere.** `last`, IDs and prefixes are all limited to the current project; `--all` widens.
+- **The live status file stays.** It answers "what is running right now" without opening the database.
+- **Size accounting is an estimate, calibrated against measurement** and guarded by a ±15% test.
 
 ## Risks
 

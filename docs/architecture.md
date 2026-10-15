@@ -12,7 +12,8 @@ internal/config/        kestrel.yaml schema, strict decoding, validation with li
 internal/discovery/     bounded, read-only project scan → service candidates
 internal/output/        TTY/NO_COLOR detection, ANSI styles, text renderers, JSON writer
 internal/events/        event identity (ULID, seq, fingerprint), level detection, pattern library
-internal/privacy/       redaction applied before anything is printed (later: stored, exported)
+internal/privacy/       redaction applied before anything is printed, stored, or exported
+internal/storage/       SQLite sessions + events, log segments, migrations, retention, export
 internal/collectors/    line framing, repeat folding, bounded buffer with backpressure
 internal/health/        http/tcp/process probes, readiness state machine
 internal/process/       process groups / Job Objects, graceful-then-forced stop, supervisor
@@ -85,7 +86,8 @@ A post-pass then reconciles the results:
   that ID exists. Process exit is tracked separately from pipe EOF, so a grandchild that holds the pipes can't
   hide the main process's exit.
 - **Lines.** `ReadLines` uses `bufio.Reader.ReadSlice`. Lines longer than 16 KiB are cut with a
-  `…[truncated N bytes]` marker. ANSI escapes and other control characters are removed, `` redraws keep only
+  `…[truncated N bytes]` marker. ANSI escapes and other control characters are removed, `
+` redraws keep only
   their final state, and invalid UTF-8 is replaced.
 - **Order.** Producers run concurrently, so `seq` is assigned inside the buffer lock when an event is
   inserted. Delivery order is therefore always `seq` order. Collector overload is reported as a marker event
@@ -97,7 +99,43 @@ A post-pass then reconciles the results:
   readers.
 - **Live status.** A running session keeps a small JSON file at `<data dir>/run/<hash of project root>.json`
   (names, PIDs, liveness, readiness; never commands, environment, or output), rewritten at most every 250ms.
-  `kestrel status` in another terminal reads it. SQLite session storage replaces it in Phase 3.
+  `kestrel status` in another terminal reads it. It stays alongside session storage because it answers a
+  different question, "what is running right now", cheaply and without opening the database.
+
+## Storage
+
+```text
+ collector ─▶ Recorder ──(batch: 256 events / 100ms, one transaction)──▶ kestrel.db  (WAL)
+                 │                                                       sessions · events · segments
+                 └─▶ per-service segment files  sessions/<session>/<service>-NNN.log
+                      append-only NDJSON, rotated at 4 MiB, gzipped when closed (.log.gz)
+```
+
+- **What goes where.** SQLite holds sessions, an indexed `events` table, and a `segments` index. Event
+  messages in SQLite are cut to 1 KiB; the *full* redacted event is a JSON line in its service's segment, and
+  the event row records the segment ID and byte offset. Unbounded raw text never lives in a SQLite row.
+- **Indexes.** `events` is keyed by `(session_id, seq)`, with indexes on `(session_id, service, time)`,
+  `(session_id, type)` and `id`; segments are indexed by `(session, service, first_seq)`.
+- **Migrations.** `internal/storage/migrations/NNN_name.sql`, embedded. Each runs in one transaction together
+  with its `schema_migrations` row, so a failed migration leaves nothing behind and is retried next time. A
+  database written by a newer Kestrel is refused rather than guessed at.
+- **Backpressure.** `Recorder.Emit` blocks when the disk can't keep up. That fills the collector buffer, which
+  drops only debug/info lines and reports it. The recorder never drops an event itself: failures (disk full,
+  permissions) are counted on the session as `write_errors`, shown as "incomplete", and supervision continues.
+- **Closing.** On a clean end the recorder flushes, gzips the open segments, and records final counters. After a
+  crash, the next command that opens the store marks the session `interrupted` (its Kestrel PID is gone) and
+  seals its segments. A torn last line in a segment is ignored when reading.
+- **Retention** (on session end and `kestrel cleanup`): remove closed sessions that ended more than
+  `retention_days` ago, then, while the total exceeds `max_total_mb`, the oldest remaining. Active sessions and
+  the session that just ended are never removed. Rows are deleted before files, so an index entry never points at
+  deleted data; leftover directories are swept. Freed pages return to the OS via incremental vacuum.
+- **Size accounting is an estimate**: compressed segment bytes plus ~330 B per event row. Measured against real
+  disk usage (database + WAL + segments) after a 50 MB/min flood, reported size was 0.98× actual, and a test
+  fails if it drifts outside ±15%. It first read 0.70× with a naive constant, which is why it was calibrated.
+- **Export** streams one JSON document (always valid, even with unreadable data, which becomes `warnings`),
+  restores full messages from segments, and redacts every text field a second time.
+- **Project identity.** Sessions are keyed by the project root with symlinks resolved, so `/var/…` and
+  `/private/var/…` can't split one project's history.
 
 ## Config
 
@@ -116,14 +154,15 @@ kept in sync with the structs by `TestJSONSchemaInSync`.
 | `gopkg.in/yaml.v3` | Spec-mandated YAML parser. Gives node line numbers and strict known-field decoding. Also parses compose files. |
 | `github.com/spf13/pflag`, `github.com/inconshreveable/mousetrap` | Indirect, via cobra. |
 
-No new modules in Phase 2. Windows Job Objects are called through `syscall.NewLazyDLL` rather than adding
+Phase 3 adds `modernc.org/sqlite` (spec-mandated; pure Go, so cross-compilation needs no cgo) and its
+transitive modules (libc, memory, mathutil, …). No new modules in Phase 2. Windows Job Objects are called through `syscall.NewLazyDLL` rather than adding
 `golang.org/x/sys`.
 
 Dev-only, not in `go.mod`: staticcheck, run with `go run honnef.co/go/tools/cmd/staticcheck@2025.1.1`.
 
 ## Deviations from the spec
 
-- The `--session` global flag isn't registered until sessions exist (Phase 3), so no flag silently does nothing.
+- The `--session` global flag arrived with sessions (Phase 3), so no flag ever silently did nothing.
 - Event source type is named `api.EventSource` because `api.Source` already names discovery sources.
 - One event type was added to the spec's initial set: `probe_ready` (first passing probe), which timelines need
   to anchor "last known healthy".

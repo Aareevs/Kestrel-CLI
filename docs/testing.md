@@ -63,9 +63,25 @@ fakesvc --recover-file f                          # /health returns 503 until f 
 
   `go test -short` skips the flood test.
 
+## Storage tests
+
+- `internal/storage`: migrations (applied once, failure rolls back and is retried, newer database refused),
+  round trip, segment rotation + compression, full-text export, delete, retention by age and exact size order,
+  stale-session recovery, corruption, write failure, unwritable directory, size-accounting identity.
+- `tests/integration/sessions_test.go` (real binary): persist → list → show → export → delete; a byte scan of
+  the whole data directory for secrets; retention via `cleanup` and on session close (sessions are back-dated by
+  editing the database, the way time would age them); active sessions; `kill -9` recovery; corrupt and
+  unwritable storage; flood size accounting.
+
+To check a change to storage accounting, run the flood test verbosely and compare the numbers it logs:
+
+```sh
+go test -v -run TestFloodIsPersisted ./tests/integration
+```
+
 ## Scenario tests
 
 Scenarios A–J from the build spec are built on `fakesvc` as their phases arrive: A–D and I with diagnosis
-(Phase 4), E with verification (Phase 5), F–H and J in hardening (Phase 7). Phase 2 already covers parts of F
-(redaction in terminal and JSON output), G (interrupt, no orphans), H (bounded memory, overload events) and J
-(hostile lines are inert).
+(Phase 4), E with verification (Phase 5), F–H and J in hardening (Phase 7). Phases 2–3 already cover parts of F
+(redaction in terminal and JSON output, the database, WAL, segments, and export), G (interrupt, no orphans,
+storage flushed), H (bounded memory, overload events, retention) and J (hostile lines are inert).
