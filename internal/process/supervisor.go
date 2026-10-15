@@ -15,6 +15,10 @@ import (
 	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
+// outputDrainWait bounds how long an exit waits for the process's remaining
+// output to be read.
+const outputDrainWait = 2 * time.Second
+
 // ServiceSpec is one service under supervision.
 type ServiceSpec struct {
 	Name string
@@ -273,6 +277,15 @@ func (s *Supervisor) start(svc *service) bool {
 	go func() {
 		defer s.wg.Done()
 		e := p.Exit()
+		// Let the process's last output (often the reason it died) reach the
+		// collector before the exit is recorded, so causes always precede the
+		// crash in seq order. Bounded: a grandchild may still hold the pipes.
+		drained := make(chan struct{})
+		go func() { svc.readers.Wait(); close(drained) }()
+		select {
+		case <-drained:
+		case <-time.After(outputDrainWait):
+		}
 		svc.mu.Lock()
 		svc.exit, svc.changed = &e, time.Now()
 		code := e.Code
