@@ -412,3 +412,7 @@ func cleanServiceName(s string) string {
 	}
 	return out
 }
+
+// Redactor returns the redactor for this project: the built-in patterns plus
+// redaction.extra_patterns from a valid kestrel.yaml.
+func (a *App) Redactor() (*privacy.Redactor, error) { return a.redactor() }
