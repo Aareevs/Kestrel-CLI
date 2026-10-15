@@ -11,6 +11,7 @@ import (
 
 	"github.com/Aareevs/Kestrel-CLI/internal/appdir"
 	"github.com/Aareevs/Kestrel-CLI/internal/config"
+	"github.com/Aareevs/Kestrel-CLI/internal/storage"
 	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
@@ -22,7 +23,7 @@ func (a *App) Doctor(ctx context.Context) *api.DoctorReport {
 		checkPlatform(runtime.GOOS, runtime.GOARCH),
 		checkDataDir(),
 		a.checkConfig(),
-		api.DoctorCheck{Name: "storage", Status: api.CheckSkip, Message: "session storage is not implemented in this build yet"},
+		a.checkStorage(ctx),
 		checkTool("lsof", "used in suggested next steps for port conflicts"),
 	)
 	r.OK = true
@@ -94,6 +95,46 @@ func checkDataDir() api.DoctorCheck {
 		c.Status, c.Message = api.CheckFail, fmt.Sprintf("%s%s: %v", dir, origin, err)
 		return c
 	}
+}
+
+func (a *App) checkStorage(ctx context.Context) api.DoctorCheck {
+	c := api.DoctorCheck{Name: "storage"}
+	dir, _, err := appdir.Resolve()
+	if err != nil {
+		c.Status, c.Message = api.CheckSkip, "data directory unknown"
+		return c
+	}
+	h := storage.Inspect(ctx, dir)
+	switch {
+	case errors.Is(h.Problem, storage.ErrCorrupt):
+		c.Status, c.Message = api.CheckFail, fmt.Sprintf("%s: %v", h.Path, h.Problem)
+		c.Hint = "Kestrel left the file untouched. Move it aside (e.g. rename kestrel.db) to start fresh; sessions in it can't be read."
+	case errors.Is(h.Problem, storage.ErrTooNew):
+		c.Status, c.Message = api.CheckFail, h.Problem.Error()
+		c.Hint = "upgrade Kestrel, or point KESTREL_HOME at a different directory"
+	case h.Problem != nil:
+		c.Status, c.Message = api.CheckFail, fmt.Sprintf("%s: %v", h.Path, h.Problem)
+	case !h.Exists:
+		c.Status, c.Message = api.CheckOK, "no sessions recorded yet (the database is created on the first run/watch)"
+	case h.WriteErrors > 0:
+		c.Status = api.CheckWarn
+		c.Message = fmt.Sprintf("%d session(s), schema v%d; %d session(s) have incomplete records", h.Sessions, h.SchemaVersion, h.WriteErrors)
+		c.Hint = "storage failed during those sessions (disk full or permissions); see 'kestrel sessions list'"
+	default:
+		c.Status = api.CheckOK
+		c.Message = fmt.Sprintf("%d session(s), schema v%d, database %s", h.Sessions, h.SchemaVersion, humanSize(h.DiskBytes))
+	}
+	return c
+}
+
+func humanSize(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KiB", float64(n)/(1<<10))
+	}
+	return fmt.Sprintf("%d B", n)
 }
 
 func probeWritable(dir string) error {

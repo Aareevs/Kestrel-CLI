@@ -39,9 +39,10 @@ hypotheses backed by the exact events that support them, and verifies whether yo
 needs no config to start, never uploads anything, and never runs a command you didn't ask for.
 
 > [!NOTE]
-> **Kestrel is in early development.** Discovery (`inspect`, `init`), config tooling, and supervision (`run`,
-> `watch`, `status`) work today. Timelines, diagnosis, verification, session history, and the MCP server ship in
-> phases. Anything not yet built is marked **planned** below. Every output in this README comes from a real run.
+> **Kestrel is in early development.** Discovery (`inspect`, `init`), config tooling, supervision (`run`,
+> `watch`, `status`), and session recording (`sessions`, `cleanup`) work today. Timelines, diagnosis,
+> verification, and the MCP server ship in phases. Anything not yet built is marked **planned** below. Every
+> output in this README comes from a real run.
 
 ---
 
@@ -96,13 +97,15 @@ kestrel init && kestrel watch
 | `kestrel timeline` | Incident timeline: last healthy state → first anomaly → downstream symptoms | planned |
 | `kestrel diagnose` | Ranked, evidence-backed hypotheses with a concrete next step | planned |
 | `kestrel verify` | Post-fix checks over a stability window | planned |
-| `kestrel sessions` / `cleanup` | Session history, redacted export, retention | planned |
+| `kestrel sessions list\|show\|export\|delete` | Browse recorded sessions; export a redacted JSON bundle | ✅ |
+| `kestrel cleanup [--dry-run]` | Apply retention now (`retention_days`, `max_total_mb`) | ✅ |
 | `kestrel mcp` | Read-only MCP server for AI agents | planned |
 
 **Global flags** (on every command):
 - `--format json`: stable, versioned JSON on every read command (schema in [`pkg/api`](pkg/api/)); `run` and
   `watch` stream [events](docs/events.md) as NDJSON.
 - `--project <dir>`: project root (default: nearest ancestor with `kestrel.yaml`, else the current directory).
+- `--session <id|prefix|last>`: which recorded session `sessions show/export/delete` act on.
 - `-v` / `--verbose`: diagnostic logging to stderr. `-q` / `--quiet`: essential output only.
 - `--no-color`: plain output (`NO_COLOR` and non-TTY output are detected automatically).
 
@@ -153,6 +156,48 @@ kestrel session 01M4ZDNFN5XYA55F5C1HG58ZTT ended
 recognized them, and the retry loop is folded into one line. Secrets never reach the screen. Ctrl-C stopped
 every process Kestrel started, including children, and nothing else. *Planned:* `kestrel diagnose` turning this
 trail into "db failed first; api's errors are a downstream symptom", with event IDs as evidence.
+
+### Sessions
+
+Every `run` and `watch` is recorded locally, so you can come back to it after the terminal scrolls away. Real
+output (project path and the command line shortened):
+
+```text
+$ kestrel sessions list
+Sessions (2)
+  ID                          STARTED              DURATION  MODE   STATUS       EVENTS  ERRORS       SIZE  SERVICES
+  01M4ZG0QD6XNDEP8XRGMCARVQN  2026-10-15 15:29:11  1s        run    closed           13       4    6.6 KiB  api
+  01M4ZG0PZ065JG1C1933VYZH3P  2026-10-15 15:29:10  <1s       run    closed            3       0    1.7 KiB  web
+
+$ kestrel sessions show last
+Session  01M4ZG0QD6XNDEP8XRGMCARVQN
+  mode      run · closed
+  project   ~/src/shop
+  time      2026-10-15 15:29:11 → 2026-10-15 15:29:12 (1s)
+  recorded  13 events, 4 errors, 0 info lines dropped under load, 6.6 KiB on disk
+
+Final service state
+  SERVICE  LIVENESS     READINESS  DETAIL
+  api      crashed      not_ready  tcp localhost:18082 · exit code 2
+
+Events by type
+  dependency_conn_failed 2 · log_line 8 · probe_ready 1 · process_crashed 1 · process_started 1
+
+Notable events (warnings and above, lifecycle, probes; last 40 at most)
+  · 15:29:11 api      process_started        started (pid 4182): fakesvc --name api …
+  ✗ 15:29:11 api      dependency_conn_failed dial tcp 127.0.0.1:15440: connect: connection refused
+  ✓ 15:29:11 api      probe_ready            ready: tcp localhost:18082 (connected in 5ms)
+  ✗ 15:29:11 api      dependency_conn_failed dial tcp 127.0.0.1:15440: connect: connection refused
+  ✗ 15:29:12 api      log_line               fatal: cannot reach database
+  ✗ 15:29:12 api      process_crashed        crashed (exit code 2)
+```
+
+`kestrel sessions export last -o bundle.json` writes the whole session as redacted JSON (never overwriting an
+existing file). Old sessions are removed automatically when a session ends, per `storage.retention_days`
+(default 7) and `storage.max_total_mb` (default 500); `kestrel cleanup --dry-run` shows what would go. If
+Kestrel itself is killed mid-session, the next command marks that session `interrupted`, and everything recorded
+up to that point is still readable. If storage is unavailable, `run` and `watch` carry on and tell you the
+session isn't being saved.
 
 ### Discovery
 
@@ -265,10 +310,10 @@ especially, fall back to framework defaults.
 ## How It Works
 
 ```text
- discover ──▶ collect ──▶ normalize ──▶ correlate ──▶ diagnose ──▶ verify
- ✅ files      ✅ output,    ✅ typed,       planned       planned      planned
-               probes,       redacted,       (incidents,   (ranked,     (stability
-               lifecycle     classified      dep graph)    evidence)    window)
+ discover ──▶ collect ──▶ normalize ──▶ record ──▶ correlate ──▶ diagnose ──▶ verify
+ ✅ files      ✅ output,    ✅ typed,      ✅ SQLite    planned       planned      planned
+               probes,       redacted,      + log        (incidents,   (ranked,     (stability
+               lifecycle     classified     segments     dep graph)    evidence)    window)
 ```
 
 - **Discover** reads, never runs, your project files to work out what the services are.
@@ -277,6 +322,9 @@ especially, fall back to framework defaults.
 - **Normalize** turns every line into a typed [event](docs/events.md): redacted, severity-tagged, matched
   against a pattern library (port conflicts, refused connections, database errors, panics, tracebacks, OOMs,
   test failures), with repeats folded.
+
+- **Record** stores each session in a local SQLite database, with the full redacted text in append-only,
+  gzipped log segments, and enforces retention. Nothing is stored that wasn't redacted first.
 
 See the [architecture doc](docs/architecture.md).
 
@@ -315,6 +363,7 @@ Full reference: [docs/configuration.md](docs/configuration.md).
   executed, and terminal escape sequences are stripped.
 - **Out of your repo.** Kestrel's data lives in `~/Library/Application Support/Kestrel` (macOS),
   `$XDG_DATA_HOME/kestrel` (Linux), or `%LOCALAPPDATA%\Kestrel` (Windows). Override with `KESTREL_HOME`.
+  Sessions are kept 7 days / 500 MB by default, and `kestrel sessions delete` removes one immediately.
 
 Threat model and limits: [docs/security.md](docs/security.md).
 
@@ -354,6 +403,9 @@ make golden   # regenerate golden files after an intentional output change, then
   *Verify:* the port is auto-probed (`✓ ready`), secrets show as `[REDACTED:…]`, and Ctrl-C prints the summary.
 - [ ] **No orphans:** run `kestrel watch` on a config whose services spawn children, press Ctrl-C, then
   `ps -ef | grep fakesvc`. *Verify:* nothing left.
+- [ ] **Sessions:** after a run, `./bin/kestrel sessions list`, `sessions show last`, `sessions export last -o /tmp/s.json`,
+  then `grep -c REDACTED /tmp/s.json`. *Verify:* the session is listed, secrets appear only as `[REDACTED:…]`.
+- [ ] **Retention:** `./bin/kestrel cleanup --dry-run`. *Verify:* it explains what it keeps and why.
 - [ ] **Status:** while `watch` runs, run `kestrel status` in a second terminal. *Verify:* it shows liveness and
   readiness live.
 

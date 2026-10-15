@@ -95,6 +95,9 @@ func (g *globals) supervise(ctx context.Context, start func(app.SuperviseOptions
 	var live *output.Live
 	o := app.SuperviseOptions{
 		StopGrace: grace,
+		Warn: func(msg string) {
+			fmt.Fprintf(g.streams.Err, "%s %s\n", g.style.Yellow("kestrel: warning:"), msg)
+		},
 		OnSession: func(id string, names []string) {
 			live = output.NewLive(g.streams.Out, g.style, g.quiet, g.json(), names)
 			if !g.json() && !g.quiet {
@@ -126,6 +129,12 @@ func (g *globals) supervise(ctx context.Context, start func(app.SuperviseOptions
 		output.StatusTable(g.streams.Out, out.Services, g.text())
 		if out.Dropped > 0 {
 			fmt.Fprintf(g.streams.Out, "%s %d debug/info lines were dropped under load; no errors were dropped\n", g.style.Yellow("!"), out.Dropped)
+		}
+		if out.Recorded {
+			fmt.Fprintf(g.streams.Out, "%s saved as session %s  %s\n", g.style.Green("✓"), out.SessionID, g.style.Dim("(kestrel sessions show last)"))
+		}
+		if out.Retention != nil {
+			fmt.Fprintf(g.streams.Out, "%s retention removed %d older session(s)\n", g.style.Dim("·"), len(out.Retention.Removed))
 		}
 	}
 	if out.Failed {
