@@ -24,6 +24,7 @@ type App struct {
 	// ProjectRoot is absolute.
 	ProjectRoot string
 	Getenv      func(string) string
+	LookupEnv   func(string) (string, bool)
 	Now         func() time.Time
 }
 
@@ -47,7 +48,7 @@ func New(projectFlag, cwd string) (*App, error) {
 	} else {
 		root, _ = config.FindProjectRoot(cwd)
 	}
-	return &App{ProjectRoot: root, Getenv: os.Getenv, Now: time.Now}, nil
+	return &App{ProjectRoot: root, Getenv: os.Getenv, LookupEnv: os.LookupEnv, Now: time.Now}, nil
 }
 
 // ConfigPath returns the project's config file, or "" if there is none.

@@ -12,6 +12,12 @@ import (
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	go func() {
+		// After the first signal starts a graceful shutdown, restore default
+		// handling so a second Ctrl-C force-quits.
+		<-ctx.Done()
+		stop()
+	}()
 	code := cli.Execute(ctx, cli.DefaultStreams(), os.Args[1:])
 	stop()
 	os.Exit(code)

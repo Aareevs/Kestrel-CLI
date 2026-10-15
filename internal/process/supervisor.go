@@ -444,8 +444,14 @@ func (s *Supervisor) Status() []api.ServiceStatus {
 		if m != nil {
 			r, res, _ := m.State()
 			st.Readiness, st.Probe = r, m.Prober.String()
-			if res.Detail != "" {
+			if res.Detail != "" && svc.exit == nil {
 				st.Detail = res.Detail
+			}
+		}
+		// A probe result from before the process died says nothing about now.
+		if svc.spec.Run != nil && (st.Liveness == api.LivenessCrashed || st.Liveness == api.LivenessExited) {
+			if st.Readiness != api.ReadinessUnknown {
+				st.Readiness = api.ReadinessNotReady
 			}
 		}
 		out = append(out, st)

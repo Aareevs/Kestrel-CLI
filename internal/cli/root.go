@@ -141,6 +141,9 @@ func NewRootCmd(s Streams) *cobra.Command {
 	root.AddCommand(
 		newInspectCmd(g),
 		newInitCmd(g),
+		newRunCmd(g),
+		newWatchCmd(g),
+		newStatusCmd(g),
 		newConfigCmd(g),
 		newDoctorCmd(g),
 		newVersionCmd(g),
