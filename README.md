@@ -555,10 +555,10 @@ Threat model and limits: [docs/security.md](docs/security.md).
 
 | | macOS | Linux | Windows |
 | :--- | :---: | :---: | :---: |
-| Discovery, diagnosis, timelines, sessions, MCP | ✅ tested (CI) | ✅ tested (CI) | builds; untested |
-| Supervision (process groups, clean Ctrl-C) | ✅ tested | ✅ tested | Job Objects; untested |
+| Discovery, diagnosis, timelines, sessions, MCP | ✅ tested (CI) | ✅ tested (CI) | compiles; CI pending |
+| Supervision (process groups, clean Ctrl-C) | ✅ tested | ✅ tested | Job Objects; CI pending |
 | Services survive `kill -9` of Kestrel? | can (no parent-death signal on macOS) | no (`Pdeathsig`) | no (job closes) |
-| `verify` command checks | ✅ tested | ✅ tested | `cmd.exe /C`; untested |
+| `verify` command checks | ✅ tested | ✅ tested | `cmd.exe /C`; CI pending |
 | Install script / Homebrew | from the first release | from the first release | download the `.zip` |
 
 Binaries are static (pure-Go SQLite, no cgo). They are not notarized for macOS; see

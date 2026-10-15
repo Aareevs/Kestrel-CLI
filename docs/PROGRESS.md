@@ -1,5 +1,43 @@
 # Progress
 
+## Follow-up: Windows test harness and CI runner (2026-10-15)
+
+Windows supervision (`proc_windows.go`) was implemented with Job Objects and console break events, but was untested because integration test suites carried `//go:build !windows` and CI only ran on Ubuntu and macOS.
+
+### Built
+
+- **Command normalization:** `cmd.exe /S /C` command parser in `proc_windows.go` normalizes leading `./path/...` and `"./path/..."` into `.\path\...`, preventing `cmd.exe` from interpreting `/` as a command switch delimiter.
+- **Cross-platform integration test harness:** Extracted process management, event streaming, and binary compilation from `supervise_test.go` into `harness_test.go`, with platform-specific process group controls in `harness_unix_test.go` and `harness_windows_test.go`.
+- **Windows process monitoring & memory:** Pure-Go process resident set size accounting implemented via `psapi.dll` (`GetProcessMemoryInfo`), eliminating the Unix `ps` dependency.
+- **Windows Job Object tests:** `internal/process/proc_windows_test.go` exercises Job Object creation, process group containment, exit classification, pipe capture, and cleanup.
+- **Non-admin file copy fallback:** Integration scenarios copy test binaries instead of relying on `os.Symlink`, which requires elevated privileges or developer mode on Windows.
+- **Signal handling in test fixtures:** `tests/fakesvc/main.go` ignores `os.Interrupt` in addition to `syscall.SIGTERM` when `--ignore-term` is passed.
+- **CI matrix:** Added `windows-latest` to `.github/workflows/ci.yml` running `gofmt`, `go vet`, `go test ./...`, and `go build ./cmd/kestrel` via Git Bash.
+
+### Quality checks (run on darwin/arm64 host)
+
+| Check | Result |
+|---|---|
+| `gofmt -l .` | no output |
+| `go vet ./...` | pass, plus `GOOS=windows go vet ./...` across all internal and test packages |
+| `go test ./...` | pass (macOS) |
+| `go test -race ./...` | pass (macOS) |
+| Windows compilation: `GOOS=windows go test -c` for `internal/process` and `tests/integration` | pass |
+| `staticcheck@2025.1.1` | pass |
+
+### Exit criteria & verification
+
+> All integration test packages compile for `GOOS=windows`; local tests pass on Unix without regression; GitHub Actions `windows-latest` job added to validate against real Windows kernel.
+
+- Local quality gates (`make check`, `make lint`) pass 100% on darwin/arm64.
+- Cross-compilation of test suites for `GOOS=windows` passes without build tag exclusion.
+- Real execution verification on Windows kernel deferred to the CI run triggered by opening this PR.
+
+### Known gaps and limitations
+
+- **No `-race` on Windows CI:** The Go race detector on Windows requires MinGW (gcc) and CGO. Since Kestrel compiles with `CGO_ENABLED=0` (pure-Go SQLite via modernc.org), the race detector step in CI is constrained to `ubuntu-latest` and `macos-latest`.
+- **`install.sh` on Windows:** The shell installer requires POSIX `sh` and `curl`. On Windows, users download the standalone `.zip` archive from GitHub releases or run via Go.
+
 ## Follow-up: Homebrew formula instead of a cask (2026-10-15). Not released.
 
 - **What changed:** the tap now gets a standard **formula** (`Formula/kestrel.rb`), which works on macOS and

@@ -13,8 +13,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -29,10 +32,12 @@ jobs:
       - name: test
         run: go test ./...
       - name: race
+        if: matrix.os != 'windows-latest'
         run: go test -race ./...
       - name: build
         run: go build ./cmd/kestrel
       - name: cross-compile
+        if: matrix.os == 'ubuntu-latest'
         run: |
           GOOS=linux   GOARCH=amd64 go build -o /dev/null ./cmd/kestrel
           GOOS=linux   GOARCH=arm64 go build -o /dev/null ./cmd/kestrel
