@@ -1,0 +1,41 @@
+name: homebrew
+
+# Runs when a release is PUBLISHED (not when the draft is created), so the
+# formula only ever points at downloadable archives. It renders
+# Formula/kestrel.rb from the release's checksums.txt and pushes it to
+# github.com/Aareevs/homebrew-tap. See docs/releasing.md.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: render the formula from the published checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release download "$TAG" --pattern checksums.txt --dir /tmp/rel
+          scripts/homebrew-formula.sh "$TAG" /tmp/rel/checksums.txt > /tmp/kestrel.rb
+          ruby -c /tmp/kestrel.rb
+      - name: push it to the tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/Aareevs/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          cp /tmp/kestrel.rb tap/Formula/kestrel.rb
+          cd tap
+          git config user.name "Aareevs"
+          git config user.email "noreply@github.com"
+          git add Formula/kestrel.rb
+          git diff --cached --quiet && { echo "formula unchanged"; exit 0; }
+          git commit -m "kestrel ${TAG}"
+          git push

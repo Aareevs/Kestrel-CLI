@@ -128,8 +128,9 @@ we are executing it, the decisions made along the way, and the risks we are watc
   publish by hand. The first-release steps are in `docs/releasing.md`.
 - **GoReleaser is pinned (v2.18.2) and run via `go run`**, as staticcheck is: nothing is installed globally. CI
   validates the config on every PR.
-- **The tap gets a cask, not a formula,** because GoReleaser v2 deprecated generating formulas. The install
-  command is unchanged: `brew install aareevs/tap/kestrel`.
+- **The tap gets a formula** (changed from a cask after Phase 7). `scripts/homebrew-formula.sh` renders it from
+  `checksums.txt`, and `homebrew.yml` pushes it when a release is published. GoReleaser's own formula option is
+  deprecated and fails `goreleaser check`. The install command is unchanged: `brew install aareevs/tap/kestrel`.
 - **The installer verifies before it installs**, never uses sudo, never edits shell profiles, and can be pointed
   at a local directory, which is how it's tested without a release.
 - **Each scenario gets one end-to-end test** of every guarantee the spec states for it, rather than relying on

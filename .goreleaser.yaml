@@ -64,27 +64,6 @@ release:
   draft: true
   replace_existing_draft: true
 
-# Homebrew cask (GoReleaser v2 replaced `brews` formulas with casks). It is
-# pushed to github.com/Aareevs/homebrew-tap, which must exist first; see
-# docs/releasing.md.
-homebrew_casks:
-  - name: kestrel
-    repository:
-      owner: Aareevs
-      name: homebrew-tap
-      token: '{{ envOrDefault "HOMEBREW_TAP_TOKEN" "" }}'
-    directory: Casks
-    homepage: https://github.com/Aareevs/Kestrel-CLI
-    description: Local-first debugging CLI that reconstructs what broke in your dev stack, with evidence
-    license: MIT
-    commit_author:
-      name: Aareevs
-      email: noreply@github.com
-    # The binaries are not notarized; without this, macOS Gatekeeper blocks
-    # the first run of a downloaded binary.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kestrel"]
-          end
+# The Homebrew formula is not generated here (GoReleaser v2 only offers
+# deprecated `brews` for formulas). scripts/homebrew-formula.sh renders it from
+# checksums.txt, and release.yml pushes it to the tap; see docs/releasing.md.
