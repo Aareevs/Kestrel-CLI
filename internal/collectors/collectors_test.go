@@ -341,3 +341,23 @@ func TestCollectorFloodWithSlowSink(t *testing.T) {
 	}
 	t.Logf("delivered %d events, dropped %d info lines in %d overload reports", len(rec.evs)-overload, dropped, overload)
 }
+
+// Events that don't come from an output stream (supervisor messages such as
+// "started (pid N): <command>") are stripped of terminal control sequences
+// too, and redacted.
+func TestEmitCleansAndRedacts(t *testing.T) {
+	var got []api.Event
+	c := New(events.NewStamper(nil), SinkFunc(func(e api.Event) { got = append(got, e) }), Options{})
+	go c.Run()
+	c.Emit(api.Event{ServiceID: "api", Type: api.EventProcessStarted,
+		Message: "started (pid 1): run --say '\x1b]0;pwned\x07\x1b[2Jhi\x07' token=sup3rs3cret"})
+	c.Close()
+	c.Wait()
+	if len(got) != 1 {
+		t.Fatalf("%d events", len(got))
+	}
+	m := got[0].Message
+	if strings.ContainsAny(m, "\x1b\x07") || !strings.Contains(m, "--say 'hi'") || strings.Contains(m, "sup3rs3cret") {
+		t.Fatalf("%q", m)
+	}
+}
