@@ -11,6 +11,7 @@ const (
 	EventProcessCrashed       EventType = "process_crashed"
 	EventLogLine              EventType = "log_line"
 	EventStartupTimeout       EventType = "startup_timeout"
+	EventProbeReady           EventType = "probe_ready" // first passing probe after start
 	EventProbeFailed          EventType = "probe_failed"
 	EventProbeRecovered       EventType = "probe_recovered"
 	EventPortBindFailed       EventType = "port_bind_failed"
