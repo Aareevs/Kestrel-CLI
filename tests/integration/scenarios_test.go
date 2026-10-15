@@ -1,5 +1,3 @@
-//go:build !windows
-
 package integration
 
 import (
@@ -11,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -240,11 +239,22 @@ func TestScenarios(t *testing.T) {
 			t.Parallel()
 			home, project := t.TempDir(), t.TempDir()
 			project, _ = filepath.EvalSymlinks(project)
-			// A symlink, not a copy: macOS scans every new binary on first exec,
-			// which under parallel load can take seconds.
-			os.MkdirAll(filepath.Join(project, "bin"), 0o755)
-			if err := os.Symlink(fake, filepath.Join(project, "bin", "fakesvc")); err != nil {
-				t.Fatal(err)
+			binDir := filepath.Join(project, "bin")
+			os.MkdirAll(binDir, 0o755)
+			dest := filepath.Join(binDir, "fakesvc")
+			if runtime.GOOS == "windows" {
+				dest += ".exe"
+				data, err := os.ReadFile(fake)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(dest, data, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.Symlink(fake, dest); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			ports := map[string]int{}

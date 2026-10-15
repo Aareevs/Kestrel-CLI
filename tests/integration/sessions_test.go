@@ -1,5 +1,3 @@
-//go:build !windows
-
 package integration
 
 import (
@@ -14,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -336,8 +333,8 @@ func TestKilledKestrelLeavesRecoverableSession(t *testing.T) {
 	evs := readEvents(k.stdout)
 	evs.waitFor(t, "output", 20*time.Second, func(e api.Event) bool { return strings.Contains(e.Message, "still alive") })
 	time.Sleep(400 * time.Millisecond) // let the recorder flush a batch
-	// SIGKILL only Kestrel itself (not its process group), like an OOM kill.
-	if err := syscall.Kill(k.cmd.Process.Pid, syscall.SIGKILL); err != nil {
+	// Kill only Kestrel itself (not its process group), like an OOM kill.
+	if err := k.cmd.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
 	k.cmd.Wait()
