@@ -26,7 +26,7 @@ const (
 	batchMax       = 256
 	batchInterval  = 100 * time.Millisecond
 	maxRowMessage  = 1024 // bytes of message kept in SQLite; the segment has all of it
-	rowOverhead    = 200  // rough size of an event row beyond its message
+	rowOverhead    = 330  // measured: ~450 B/event on disk incl. 4 indexes for ~120 B messages
 	recorderBuffer = 1024
 )
 

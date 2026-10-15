@@ -22,8 +22,7 @@ var ctx = context.Background()
 // clock is a controllable time source.
 type clock struct{ t time.Time }
 
-func (c *clock) now() time.Time          { return c.t }
-func (c *clock) advance(d time.Duration) { c.t = c.t.Add(d) }
+func (c *clock) now() time.Time { return c.t }
 
 func newClock() *clock { return &clock{t: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)} }
 
@@ -300,12 +299,18 @@ func TestSegmentsRotateCompressAndHoldFullText(t *testing.T) {
 			t.Fatalf("export order: position %d has seq %d", i, e.Seq)
 		}
 	}
-	// Session size reflects compressed segments, so it must be well below raw.
+	// Size accounting is exact once every segment is sealed: the session's
+	// size is its compressed segments plus the per-row estimate, and it is
+	// smaller than storing the raw segments would have been.
 	sm, _, _ := s.GetSession(ctx, id)
-	var raw int64
-	s.db.QueryRow(`SELECT SUM(bytes) FROM segments WHERE session_id = ?`, id).Scan(&raw)
-	if sm.SizeBytes >= raw {
-		t.Errorf("session size %d should be below raw segment bytes %d", sm.SizeBytes, raw)
+	var disk, raw, rowBytes int64
+	s.db.QueryRow(`SELECT SUM(disk_bytes), SUM(bytes) FROM segments WHERE session_id = ?`, id).Scan(&disk, &raw)
+	s.db.QueryRow(`SELECT SUM(length(CAST(message AS BLOB)) + length(CAST(attrs AS BLOB)) + ?) FROM events WHERE session_id = ?`, rowOverhead, id).Scan(&rowBytes)
+	if sm.SizeBytes != disk+rowBytes {
+		t.Errorf("session size %d != compressed segments %d + row estimate %d", sm.SizeBytes, disk, rowBytes)
+	}
+	if disk >= raw {
+		t.Errorf("compressed segments (%d) should be smaller than raw (%d)", disk, raw)
 	}
 	if n := strings.Count(strings.Join(segmentFiles(t, dir, id), " "), ".gz"); n < 4 {
 		t.Errorf("only %d compressed segments", n)
