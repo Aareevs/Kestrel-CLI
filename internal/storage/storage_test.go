@@ -178,6 +178,44 @@ func TestFailedMigrationRollsBack(t *testing.T) {
 	}
 }
 
+// Several processes opening a brand-new database at once (watch in one
+// terminal, status in another) must all succeed: exactly one applies each
+// migration. Each Open has its own connection pool, as separate processes do.
+func TestConcurrentFirstOpen(t *testing.T) {
+	for round := 0; round < 5; round++ {
+		dir := t.TempDir()
+		const n = 8
+		errs := make(chan error, n)
+		start := make(chan struct{})
+		for i := 0; i < n; i++ {
+			go func() {
+				<-start
+				s, err := Open(ctx, dir, Options{})
+				if err == nil {
+					s.Close()
+				}
+				errs <- err
+			}()
+		}
+		close(start)
+		for i := 0; i < n; i++ {
+			if err := <-errs; err != nil {
+				t.Fatalf("round %d: concurrent open failed: %v", round, err)
+			}
+		}
+		s, err := Open(ctx, dir, Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var rows int
+		s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&rows)
+		if v, _ := s.SchemaVersion(ctx); v != latest() || rows != len(builtinMigrations()) {
+			t.Fatalf("version %d with %d migration rows", v, rows)
+		}
+		s.Close()
+	}
+}
+
 func TestNewerDatabaseIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	future := append(builtinMigrations(), Migration{Version: latest() + 1, Name: "future", SQL: `CREATE TABLE future (x INTEGER);`})
