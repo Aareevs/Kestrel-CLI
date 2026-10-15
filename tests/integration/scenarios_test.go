@@ -32,11 +32,16 @@ type scenario struct {
 	// until is the event that completes the scenario; watch is stopped
 	// `settle` after it arrives. Waiting for events rather than sleeping
 	// keeps the scenario independent of machine load.
-	until    func(e api.Event) bool
-	settle   time.Duration
-	exitCode int // expected `kestrel diagnose` exit code
-	check    func(t *testing.T, rep api.DiagnosisReport)
-	setup    func(t *testing.T, ports map[string]int) // e.g. occupy a port
+	until func(e api.Event) bool
+	// alsoUntil, if set, must also have arrived (any order).
+	alsoUntil func(e api.Event) bool
+	settle    time.Duration
+	exitCode  int // expected `kestrel diagnose` exit code
+	check     func(t *testing.T, rep api.DiagnosisReport)
+	// hold names a port that "another process" (the test) already listens
+	// on. The listener is opened on port 0 before the config is written, so
+	// no other test can take the port in between.
+	hold string
 }
 
 var scenarios = []scenario{
@@ -46,7 +51,7 @@ var scenarios = []scenario{
 services:
   - name: database
     command: './bin/fakesvc --name database --exit-after 300ms --exit-code 1 --exit-message "FATAL:  database files are incompatible with server"'
-    health: { type: tcp, address: "127.0.0.1:{{P:database}}", interval: 100ms, timeout: 100ms, retries: 2, startup_grace: 1s }
+    health: { type: tcp, address: "127.0.0.1:{{P:database}}", interval: 100ms, timeout: 100ms, retries: 2, startup_grace: 2s }
   - name: api
     command: './bin/fakesvc --name api --connect 127.0.0.1:{{P:database}} --connect-every 150ms --listen 127.0.0.1:{{P:api}} --listen-after 60s'
     depends_on: [database]
@@ -56,9 +61,13 @@ services:
     depends_on: [api]
     health: { type: http, url: "http://127.0.0.1:{{P:frontend}}/health", interval: 100ms, timeout: 100ms, retries: 2, startup_grace: 1s }
 `,
-		until:    func(e api.Event) bool { return e.ServiceID == "frontend" && e.Type == api.EventDependencyConnFailed },
-		settle:   time.Second,
-		exitCode: 1,
+		// The database's probe gives up 2s after it starts. api starts once the
+		// database has crashed (300ms in) and is refused at once, so its errors
+		// come first. That order follows from causality, not machine speed.
+		until:     func(e api.Event) bool { return e.ServiceID == "frontend" && e.Type == api.EventDependencyConnFailed },
+		alsoUntil: func(e api.Event) bool { return e.ServiceID == "database" && e.Type == api.EventStartupTimeout },
+		settle:    time.Second,
+		exitCode:  1,
 		check: func(t *testing.T, rep api.DiagnosisReport) {
 			d := onlyIncident(t, rep)
 			top := d.Hypotheses[0]
@@ -81,32 +90,7 @@ services:
 `,
 		until:    func(e api.Event) bool { return e.ServiceID == "web" && e.Type == api.EventProcessCrashed },
 		exitCode: 1,
-		setup: func(t *testing.T, ports map[string]int) {
-			// "Another process" already holds web's port. It must survive untouched.
-			ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", ports["web"]))
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				// The holder is still serving after Kestrel ran and shut down.
-				c, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second)
-				if err != nil {
-					t.Errorf("the process holding the port was disturbed: %v", err)
-				} else {
-					c.Close()
-				}
-				ln.Close()
-			})
-			go func() {
-				for {
-					c, err := ln.Accept()
-					if err != nil {
-						return
-					}
-					c.Close()
-				}
-			}()
-		},
+		hold:     "web",
 		check: func(t *testing.T, rep api.DiagnosisReport) {
 			d := onlyIncident(t, rep)
 			top := d.Hypotheses[0]
@@ -264,6 +248,9 @@ func TestScenarios(t *testing.T) {
 			}
 
 			ports := map[string]int{}
+			if sc.hold != "" {
+				ports[sc.hold] = holdPort(t)
+			}
 			cfg := portRefRe.ReplaceAllStringFunc(sc.config, func(m string) string {
 				name := portRefRe.FindStringSubmatch(m)[1]
 				if ports[name] == 0 {
@@ -274,13 +261,13 @@ func TestScenarios(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(project, "kestrel.yaml"), []byte(cfg), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if sc.setup != nil {
-				sc.setup(t, ports)
-			}
 
 			k := startKestrel(t, home, "watch", "--project", project, "--format", "json")
 			evs := readEvents(k.stdout)
 			evs.waitFor(t, sc.name+" to play out", 60*time.Second, sc.until)
+			if sc.alsoUntil != nil {
+				evs.waitFor(t, sc.name+" to play out", 60*time.Second, sc.alsoUntil)
+			}
 			time.Sleep(sc.settle)
 			k.ctrlC()
 			if code := k.wait(t, 30*time.Second); code != 0 && code != 1 {
@@ -304,6 +291,36 @@ func TestScenarios(t *testing.T) {
 			golden(t, "scenarios/"+sc.name+".timeline.txt", n.apply(tl))
 		})
 	}
+}
+
+// holdPort plays "another process" holding a port: it listens on a fresh
+// port and serves until the test ends, then checks it was never disturbed.
+func holdPort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		// The holder is still serving after Kestrel ran and shut down.
+		c, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second)
+		if err != nil {
+			t.Errorf("the process holding the port was disturbed: %v", err)
+		} else {
+			c.Close()
+		}
+		ln.Close()
+	})
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	return ln.Addr().(*net.TCPAddr).Port
 }
 
 // checkEvidenceExists: every hypothesis cites at least one event, and every
