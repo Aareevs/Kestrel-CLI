@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -137,6 +138,7 @@ func TestFloodKeepsMemoryBounded(t *testing.T) {
 	var sawOverload sync.WaitGroup
 	sawOverload.Add(1)
 	var once sync.Once
+	var stopping atomic.Bool
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
@@ -149,7 +151,9 @@ func TestFloodKeepsMemoryBounded(t *testing.T) {
 			if err != nil {
 				return
 			}
-			time.Sleep(200 * time.Millisecond)
+			if !stopping.Load() {
+				time.Sleep(200 * time.Millisecond)
+			}
 		}
 	}()
 
@@ -161,8 +165,8 @@ func TestFloodKeepsMemoryBounded(t *testing.T) {
 			samples = append(samples, kb)
 		}
 	}
+	stopping.Store(true)
 	k.ctrlC()
-	go io.Copy(io.Discard, k.stdout)
 	code := k.wait(t, 30*time.Second)
 	<-readDone
 

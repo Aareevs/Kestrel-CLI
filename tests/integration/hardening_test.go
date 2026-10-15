@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -191,6 +190,7 @@ func TestScenarioHLogFlood(t *testing.T) {
 	k := startKestrel(t, home, "run", "--project", project, "--format", "json", "--", fake, "--name", "flood",
 		"--flood-bytes-per-min", strconv.Itoa(50<<20))
 	var overloads atomic.Int32
+	var stopping atomic.Bool
 	readDone := make(chan struct{})
 	go func() { // a slow reader: ~64 KiB every 200ms
 		defer close(readDone)
@@ -201,18 +201,21 @@ func TestScenarioHLogFlood(t *testing.T) {
 			if err != nil {
 				return
 			}
-			time.Sleep(200 * time.Millisecond)
+			if !stopping.Load() {
+				time.Sleep(200 * time.Millisecond)
+			}
 		}
 	}()
 	maxKB := 0
-	for end := time.Now().Add(6 * time.Second); time.Now().Before(end); {
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
 		time.Sleep(500 * time.Millisecond)
 		if kb, err := rssKB(k.cmd.Process.Pid); err == nil {
 			maxKB = max(maxKB, kb)
 		}
 	}
+	stopping.Store(true)
 	k.ctrlC()
-	go io.Copy(io.Discard, k.stdout)
 	if code := k.wait(t, 30*time.Second); code != 0 {
 		t.Fatalf("exit %d\n%s", code, k.stderr)
 	}
