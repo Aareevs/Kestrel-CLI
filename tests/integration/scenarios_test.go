@@ -3,6 +3,8 @@
 package integration
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -15,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Aareevs/Kestrel-CLI/internal/cli"
 	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
@@ -347,5 +350,84 @@ func checkEvidenceExists(t *testing.T, home, project string, rep api.DiagnosisRe
 		for _, id := range e.Evidence {
 			mustExist("graph edge", id)
 		}
+	}
+}
+
+// In-process run of a small failing stack so coverage tooling sees the
+// diagnose/timeline code paths and their flags.
+func TestDiagnoseTimelineInProcess(t *testing.T) {
+	_, fake := buildBins(t)
+	t.Setenv("KESTREL_HOME", t.TempDir())
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	port := freePort(t)
+	cfg := fmt.Sprintf(`version: 1
+correlation: { window: 30s }
+services:
+  - name: db
+    command: '%[1]s --name db --exit-after 200ms --exit-code 1 --exit-message "FATAL:  could not open data directory"'
+    health: { type: tcp, address: "127.0.0.1:%[2]d", interval: 100ms, timeout: 100ms, startup_grace: 5s }
+  - name: api
+    command: '%[1]s --name api --connect 127.0.0.1:%[2]d --connect-every 100ms --exit-after 900ms --exit-code 1 --exit-message "Error: Cannot find module pg"'
+    depends_on: [db]
+`, fake, port)
+	os.WriteFile(filepath.Join(dir, "kestrel.yaml"), []byte(cfg), 0o644)
+
+	// (Without db's probe, api wouldn't wait for it and would fail first;
+	// Kestrel would then rightly call the incident unresolved.)
+
+	// Nothing recorded yet.
+	if r := run(t, dir, nil, "diagnose"); r.code != 2 || !strings.Contains(r.stderr, "none recorded yet") {
+		t.Fatalf("diagnose with no sessions: exit %d %s", r.code, r.stderr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+	defer cancel()
+	var o, e bytes.Buffer
+	if code := cli.Execute(ctx, cli.Streams{In: strings.NewReader(""), Out: &o, Err: &e, Getenv: func(string) string { return "" },
+		Getwd: func() (string, error) { return dir, nil }}, []string{"watch", "--quiet"}); code != 0 && code != 1 {
+		t.Fatalf("watch exit %d: %s", code, e.String())
+	}
+
+	r := run(t, dir, nil, "diagnose", "--no-color")
+	for _, want := range []string{"Incident #1", "Initiating failure: db", "K004-startup-failure", "K006-missing-module", "Next step"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("diagnose lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	if r.code != 1 {
+		t.Fatalf("diagnose exit %d", r.code)
+	}
+	rep := decode[api.DiagnosisReport](t, run(t, dir, nil, "diagnose", "--format", "json", "--session", "last").stdout)
+	if len(rep.Incidents) != 1 || rep.Incidents[0].Incident.InitiatingService != "db" || len(rep.Graph) == 0 {
+		t.Fatalf("report: %+v", rep.Incidents)
+	}
+
+	r = run(t, dir, nil, "timeline", "--no-color")
+	if !strings.Contains(r.stdout, "first anomaly") || !strings.Contains(r.stdout, "Dependencies: api → db (declared)") {
+		t.Fatalf("timeline:\n%s", r.stdout)
+	}
+	r = run(t, dir, nil, "timeline", "--no-color", "--service", "api", "-n", "50")
+	if !strings.Contains(r.stdout, "api · its recorded output") || !strings.Contains(r.stdout, "Cannot find module") {
+		t.Fatalf("timeline --service:\n%s", r.stdout)
+	}
+	tl := decode[api.TimelineReport](t, run(t, dir, nil, "timeline", "--format", "json", "--service", "api").stdout)
+	if tl.Service != "api" || len(tl.Events) == 0 || len(tl.Incidents) != 1 {
+		t.Fatalf("timeline json: %+v", tl)
+	}
+	if r := run(t, dir, nil, "timeline", "--service", "nope"); r.code != 2 || !strings.Contains(r.stderr, `no service "nope"`) {
+		t.Fatalf("unknown service: exit %d %s", r.code, r.stderr)
+	}
+	// --since a moment: the incident ended earlier, so nothing is in range.
+	r = run(t, dir, nil, "timeline", "--no-color", "--since", "1ms")
+	if !strings.Contains(r.stdout, "showing events since") || !strings.Contains(r.stdout, "No incidents in this session") {
+		t.Fatalf("timeline --since:\n%s", r.stdout)
+	}
+	// Another project needs --all.
+	other, _ := filepath.EvalSymlinks(t.TempDir())
+	if r := run(t, other, nil, "diagnose", rep.Session.ID); r.code != 2 {
+		t.Fatalf("cross-project diagnose: exit %d", r.code)
+	}
+	if r := run(t, other, nil, "diagnose", rep.Session.ID, "--all", "--quiet"); r.code != 1 || strings.Contains(r.stdout, "never runs them") {
+		t.Fatalf("diagnose --all --quiet: exit %d\n%s", r.code, r.stdout)
 	}
 }

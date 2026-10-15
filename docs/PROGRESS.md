@@ -1,5 +1,90 @@
 # Progress
 
+## Phase 4: Correlation and diagnosis (2026-10-15)
+
+### Built
+
+- `internal/graph`: the dependency graph. Declared edges come from `depends_on`. Inferred edges come only from
+  connection errors aimed at a port exactly one service owns, and carry the event IDs. A contested port has no
+  owner, and simultaneous failures never create an edge (tested).
+- `internal/correlation`: anomalies grouped into incidents within `correlation.window`. Each link is strong (same
+  service, dependency path, port) or weak (time only), and correlation strength is reported separately from causal
+  confidence. The initiating failure is the one unexplained member; when there are several, that is said
+  explicitly. Timelines carry last known state, first anomaly, key events, downstream symptoms (claim:
+  correlated), and recovery, with repeats collapsed.
+- `internal/diagnosis`: a rule engine and six documented rules (`K001` port conflict, `K002` dependency down, `K003`
+  crash after healthy start, `K004` startup failure, `K005` dependency not running, `K006` missing module). Every
+  hypothesis carries supporting and contradicting event IDs, a confidence level plus the factors behind it, and one
+  next step (a command for you; never run). Incidents are `unresolved` when no single failure stands out.
+- Session topology is recorded with each session (migration 002, an in-place upgrade tested on a v1 database
+  with data), so any stored session can be diagnosed later.
+- Commands: `kestrel diagnose` (exit 0 / 1 / 3) and `kestrel timeline` (`--service`, `--since`, `-n`). Both work on
+  a live session, and both support `--format json` and `--all`.
+
+### Exit criteria
+
+> Scenarios A, B, C, D, I pass with golden outputs; no hypothesis lacks evidence IDs.
+
+Met. `TestScenarios` runs each scenario as a real `fakesvc` stack under `kestrel watch`, then compares the
+normalized `diagnose` and `timeline` output with goldens I reviewed line by line, and asserts the key facts in code:
+
+| Scenario | Result |
+|---|---|
+| A database startup failure | `K002`, high: "database failed first; api, frontend failed because of it". Symptoms: api, frontend. Exit 1 |
+| B port conflict | `K001`, high, `lsof` next step; the test's own listener on that port is verified untouched. Exit 1 |
+| C crash after healthy start | `K003`, high, from the logged panic; the explanation separates "Observed:" from "Hypothesis:". Exit 1 |
+| D noisy but healthy | no incident. Exit 0 |
+| I ambiguous simultaneous failures | unresolved, two competing high-confidence hypotheses about different services, weak correlation. Exit 3 |
+
+No hypothesis lacks evidence, by two independent mechanisms. The engine drops any hypothesis that cites no events,
+which is tested with a deliberately misbehaving rule. And every scenario checks that each cited event ID (evidence,
+initiating event, symptoms, graph edges) exists in the session's export. Stability: 11 consecutive runs, 3 of them
+under 8 CPU hogs.
+
+### Bugs found while building this (fixed in this PR)
+
+- **Node connection errors lost their target** (a Phase 2 pattern bug). RE2 takes the leftmost match, so for
+  `Error: connect ECONNREFUSED 127.0.0.1:8080` a target-less alternative won. Diagnosis then printed "dependency at
+  (blank) isn't running".
+- **Repeat counts were one too high** everywhere: a run of 29 lines showed as 30. A repeat summary stands for
+  exactly its folded lines. There is now one definition (`Event.Lines()`), pinned to ground truth by a collector
+  test.
+- **Repeat summaries appeared at the end of timelines** (they're recorded when the run ends). They now merge into
+  their run.
+- **A crash could be recorded before the line that explained it** (the output pipe and `wait()` race). The
+  supervisor now drains output, bounded at 2s, before recording an exit. The test was first written in a way that
+  could not fail, which I caught by reverting the fix; it was redesigned to reproduce the race (fails 3/3 without
+  the fix, passes with it, including under `-race`).
+- **K002 lowered its own confidence for transitive dependents**, and ranked a downstream "api failed first" above
+  the real root. Chains are now followed explicitly, and a "root" that itself depends on an earlier failure is
+  demoted.
+- **A service's first-ever readiness was labeled "recovery"** when it happened to follow a connection error.
+- **Test-harness flakiness** from copying an 8 MB binary into five projects at once (macOS scans fresh binaries). It
+  is symlinked now, and scenarios stop on events rather than sleeps.
+
+### Quality checks (darwin/arm64, go1.26.2)
+
+| Check | Result |
+|---|---|
+| `gofmt -l .` | no output |
+| `go vet ./...` | pass, plus `GOOS=windows go vet ./internal/...` |
+| `go test ./...` | pass (14 packages) |
+| `go test -race ./...` | pass |
+| builds: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64 | pass |
+| `staticcheck@2025.1.1` | pass |
+| Coverage (`-short`, `-coverpkg=./internal/...,./pkg/...`) | 86.5% overall; graph 89.7%, correlation 95.2%, diagnosis + rules 92.9% |
+
+### Known gaps and limitations
+
+- Incidents group by time within the window, so in a long session with continuous unrelated errors one large weak
+  incident can form. It is labeled `weak`, and no causal claim is made from timing.
+- Port ownership comes from probe ports and "listening on" output. A service that listens without saying so and
+  without a probe can't be linked by port evidence; declared `depends_on` still works.
+- A process that dies while a grandchild holds its pipe has its exit recorded after up to 2s.
+- Confidence levels come from fixed, documented rules, not from learned weights. They are deliberately coarse.
+- `diagnose` reads only diagnostic events. Plain info lines are available through `timeline --service` but are not
+  used as evidence (except as context before a crash).
+
 ## Phase 3: Persistence (2026-10-15)
 
 ### Built

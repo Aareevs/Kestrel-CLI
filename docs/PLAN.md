@@ -17,7 +17,7 @@ we are executing it, the decisions made along the way, and the risks we are watc
 | 1 | Foundation: module, cobra CLI, config load/validate, discovery, `inspect`, `init`, `config`, `doctor`, `version`, Makefile, CI, README | `kestrel inspect` correct on ≥3 fixture projects (Node, Go, compose) with golden tests | done (see PROGRESS.md) |
 | 2 | Supervision: process groups, collectors, backpressure, probes, `run`, `watch`, `status`; `tests/fakesvc` | 3 fakesvc under `watch`, Ctrl-C → zero children (tested); 50 MB/min flood → bounded RSS (measured) | done (see PROGRESS.md) |
 | 3 | Persistence: SQLite, migrations, log segments, sessions, retention, `cleanup`, `sessions` | A session is persisted, listed, shown, exported (redacted), and deleted; retention test passes | done (see PROGRESS.md) |
-| 4 | Correlation + diagnosis: graph, incidents, timeline, rules, `timeline`, `diagnose` | Scenarios A, B, C, D, I golden; every hypothesis has evidence IDs | planned |
+| 4 | Correlation + diagnosis: graph, incidents, timeline, rule engine, `timeline`, `diagnose` | Scenarios A, B, C, D, I golden; every hypothesis has evidence IDs | done (see PROGRESS.md) |
 | 5 | Verification: `verify`, stability window, authorized exec, before/after | Scenario E; exec refused without authorization (tested) | planned |
 | 6 | MCP server (read-only, reuses `internal/app`) | test client retrieves real diagnosis; redaction verified | planned |
 | 7 | Hardening + release: Scenarios F, G, H, J; GoReleaser; install script; tap; final README | `goreleaser release --snapshot --clean` succeeds | planned |
@@ -81,6 +81,16 @@ we are executing it, the decisions made along the way, and the risks we are watc
 - **Project scoping everywhere.** `last`, IDs and prefixes are all limited to the current project; `--all` widens.
 - **The live status file stays.** It answers "what is running right now" without opening the database.
 - **Size accounting is an estimate, calibrated against measurement** and guarded by a ±15% test.
+
+## Phase 4 decisions
+
+- **Time groups, it never explains.** The correlation window decides which anomalies are looked at together. Only
+  declared dependencies and port evidence can link cause and effect.
+- **"Unresolved" is a first-class answer.** When several services fail with no link between them, Kestrel shows
+  competing hypotheses and the most informative check instead of picking one (exit code 3).
+- **Rules are pure functions** over a prepared context, so they are deterministic and unit-testable without
+  processes.
+- **Scenario goldens come from real runs**, normalized, and are stopped by events rather than sleeps.
 
 ## Risks
 

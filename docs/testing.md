@@ -81,7 +81,22 @@ go test -v -run TestFloodIsPersisted ./tests/integration
 
 ## Scenario tests
 
-Scenarios A–J from the build spec are built on `fakesvc` as their phases arrive: A–D and I with diagnosis
-(Phase 4), E with verification (Phase 5), F–H and J in hardening (Phase 7). Phases 2–3 already cover parts of F
+`tests/integration/scenarios_test.go` runs each scenario as a real `fakesvc` stack under `kestrel watch`, stops it
+when the scenario's defining event arrives on the NDJSON stream (not after a fixed sleep), and compares
+`diagnose`/`timeline` with goldens in `testdata/scenarios/`. The normalizer masks only what varies between runs:
+times, IDs, PIDs, ports, durations, and repeat counts. Each scenario also asserts its key facts in code (which rule
+leads, its confidence, the status, the exit code), and checks that every cited event ID exists in the session.
+
+| Scenario | Expectation |
+|---|---|
+| A database startup failure | database is the high-confidence initiating failure; api and frontend are downstream symptoms |
+| B port conflict | `K001` with an `lsof` next step; the process holding the port is untouched |
+| C crash after healthy start | `K003`, with observed facts and the hypothesis stated separately |
+| D noisy but healthy | no incident, exit 0 |
+| I ambiguous simultaneous failures | unresolved, competing hypotheses, exit 3 |
+
+`fakesvc` is symlinked, not copied, into each scenario project: macOS scans every fresh binary on first exec, which
+made parallel runs flaky. Scenarios still to come: E with verification (Phase 5), and F–H and J in hardening
+(Phase 7). Phases 2–3 already cover parts of F
 (redaction in terminal and JSON output, the database, WAL, segments, and export), G (interrupt, no orphans,
 storage flushed), H (bounded memory, overload events, retention) and J (hostile lines are inert).

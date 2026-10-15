@@ -39,10 +39,9 @@ hypotheses backed by the exact events that support them, and verifies whether yo
 needs no config to start, never uploads anything, and never runs a command you didn't ask for.
 
 > [!NOTE]
-> **Kestrel is in early development.** Discovery (`inspect`, `init`), config tooling, supervision (`run`,
-> `watch`, `status`), and session recording (`sessions`, `cleanup`) work today. Timelines, diagnosis,
-> verification, and the MCP server ship in phases. Anything not yet built is marked **planned** below. Every
-> output in this README comes from a real run.
+> **Kestrel is in early development.** Discovery, supervision, session recording, incident timelines, and
+> evidence-backed diagnosis work today. Fix verification and the MCP server ship next. Anything not yet built is
+> marked **planned** below. Every output in this README comes from a real run.
 
 ---
 
@@ -78,9 +77,11 @@ kestrel inspect
 # 2. Run anything, no config: output captured, classified, redacted; announced ports probed
 kestrel run -- npm run dev
 
-# 3. Or supervise the whole stack from a kestrel.yaml (kestrel init writes one for you)
-kestrel init && kestrel watch
+# 3. When something breaks: what failed first, why Kestrel thinks so, and what to check next
+kestrel diagnose
 ```
+
+With a `kestrel.yaml` (`kestrel init` writes one), `kestrel watch` supervises the whole stack in dependency order.
 
 ### Commands
 
@@ -94,8 +95,8 @@ kestrel init && kestrel watch
 | `kestrel run -- <cmd>` | Wrap any command (or several with `--svc name="cmd"`), no config needed | ✅ |
 | `kestrel watch [svc...]` | Supervise configured services in dependency order with live, classified output | ✅ |
 | `kestrel status` | Liveness vs. readiness per service, for a live session or straight from `kestrel.yaml` | ✅ |
-| `kestrel timeline` | Incident timeline: last healthy state → first anomaly → downstream symptoms | planned |
-| `kestrel diagnose` | Ranked, evidence-backed hypotheses with a concrete next step | planned |
+| `kestrel timeline` | Incident timeline: last healthy state → first anomaly → downstream symptoms → recovery | ✅ |
+| `kestrel diagnose` | Ranked, evidence-backed hypotheses with a concrete next step | ✅ |
 | `kestrel verify` | Post-fix checks over a stability window | planned |
 | `kestrel sessions list\|show\|export\|delete` | Browse recorded sessions; export a redacted JSON bundle | ✅ |
 | `kestrel cleanup [--dry-run]` | Apply retention now (`retention_days`, `max_total_mb`) | ✅ |
@@ -110,11 +111,81 @@ kestrel init && kestrel watch
 - `--no-color`: plain output (`NO_COLOR` and non-TTY output are detected automatically).
 
 **Exit codes:** `0` ok · `1` failure detected / verification failed · `2` invalid usage or config ·
-`3` inconclusive investigation · `4` internal error.
+`3` inconclusive investigation (e.g. `diagnose` can't single out a cause) · `4` internal error.
 
 ---
 
 ## What It Looks Like
+
+### Diagnosis: the database → API → frontend failure
+
+A database that fails to initialize, an API that depends on it, and a frontend that proxies to the API. The
+services are [`fakesvc`](tests/fakesvc) stand-ins (this is Kestrel's
+[Scenario A](tests/integration/scenarios_test.go)), so you can reproduce it. This is the real, unedited output of
+`kestrel diagnose` after `kestrel watch`:
+
+```text
+$ kestrel diagnose
+Session 01M4ZJJPYB0ZCZPJXVCZ8FZYV9 · watch · closed · 16:13:57–16:14:03 · database, api, frontend
+
+Incident #1  ·  3 services affected  ·  started 16:13:57  ·  correlation strong
+  Initiating failure: database (evt …D8245V)
+
+  Likely initiating failure  [hypothesis · high]
+  database failed first; api, frontend failed because of it
+    ✓ database: FATAL:  database files are incompatible with server  evt …D8245V
+    ✓ database exited with code 1                               evt …1XKSJ1
+    ✓ api: connection refused to 127.0.0.1:15432 ×24            evt …PST2FE
+    ✓ api never became ready                                    evt …ZWD39Y
+    ✓ frontend: connection refused to 127.0.0.1:8080 ×15        evt …59R16Y
+    ✗ no contradicting evidence found
+    high because: database failed first (16:13:57); api declares depends_on: [database]; frontend depends on api, which failed after database
+    rule K002-dependency-down
+
+  Other hypotheses
+  2. [hypothesis · high] database failed during startup: FATAL:  database files are incompatible with server  K004-startup-failure
+       ✓ database: FATAL:  database files are incompatible with server  evt …D8245V
+       ✓ database exited with code 1                               evt …1XKSJ1
+       ✗ no contradicting evidence found
+  3. [hypothesis · low] api failed first; frontend failed because of it  K002-dependency-down
+       ✓ api never became ready                                    evt …ZWD39Y
+       ✓ frontend: connection refused to 127.0.0.1:8080 ×15        evt …59R16Y
+       ✗ database: FATAL:  database files are incompatible with server (a dependency of api, failed earlier)  evt …D8245V
+  4. [hypothesis · low] api never became ready  K004-startup-failure
+       ✓ api never became ready                                    evt …ZWD39Y
+       ✗ api: connection refused to 127.0.0.1:15432 (database had already failed) ×24  evt …PST2FE
+
+  Downstream symptoms  [correlated]
+    api       connection errors ×24; never became ready
+    frontend  connection errors ×15
+
+  Next step
+    Check why database failed; the others are likely to recover once it does.
+    $ kestrel timeline --service database
+
+Kestrel only suggests commands; it never runs them. Full evidence: --format json
+```
+
+Every ✓ and ✗ line that carries an `evt` ID is an event Kestrel recorded; `--format json` gives the full IDs. The database is blamed because
+`api` *declares* it depends on it and `api`'s refused connections target the database's port, not because the
+failures happened close together. Two services failing at the same moment with no such link produce an
+**unresolved** incident with competing hypotheses instead of a guess (exit code `3`). `kestrel timeline` shows the
+same incident in order:
+
+```text
+$ kestrel timeline
+Incident #1  ·  3 services affected  ·  started 16:13:57  ·  correlation strong
+  Initiating failure: database (evt …D8245V)
+  16:13:57           database  ● started       started (pid 12633): ./bin/fakesvc --name database --exit-after 300ms --exit-code 1 --exit-message …
+  16:13:57           database  ✗ first anomaly FATAL:  database files are incompatible with server
+  16:13:57           database  ✗ key           crashed (exit code 1)
+  16:13:57–16:14:03  api       ↳ symptom       dial tcp 127.0.0.1:15432: connect: connection refused  ×24
+  16:13:58           database  ✗ key           never became ready: tcp localhost:15432 (dial [::1]:15432: connect: connection refused)
+  16:14:00           api       ↳ symptom       never became ready: http http://localhost:8080/health (dial [::1]:8080: connect: connection refused)
+  16:14:00–16:14:03  frontend  ↳ symptom       Error: connect ECONNREFUSED 127.0.0.1:8080  ×15
+```
+
+The full rule list, with what each needs as evidence, is in [docs/diagnosis-rules.md](docs/diagnosis-rules.md).
 
 ### Supervision
 
@@ -154,8 +225,8 @@ kestrel session 01M4ZDNFN5XYA55F5C1HG58ZTT ended
 
 `api` started only after `db` answered its probe. The connection refusals are tagged with the pattern that
 recognized them, and the retry loop is folded into one line. Secrets never reach the screen. Ctrl-C stopped
-every process Kestrel started, including children, and nothing else. *Planned:* `kestrel diagnose` turning this
-trail into "db failed first; api's errors are a downstream symptom", with event IDs as evidence.
+every process Kestrel started, including children, and nothing else. `kestrel diagnose` then turns that trail into
+a ranked explanation, as shown above.
 
 ### Sessions
 
@@ -274,7 +345,9 @@ Setup will look like `claude mcp add kestrel -- kestrel mcp`. It won't work unti
 | **Bounded memory under log floods, drops reported** | ✓ | n/a | n/a | — (context overflow) |
 | **Works offline, nothing uploaded** | ✓ | ✓ | ✓ | — |
 | **Never executes anything it finds** | ✓ | ✓ | ✓ | — |
-| **Ordered incident timeline across services** | planned | — | Partial (interleaved) | — |
+| **Ordered incident timeline across services** | ✓ | — | Partial (interleaved) | — |
+| **Names the failure that came first, with evidence** | ✓ | — | — | — (guesses) |
+| **Says "unresolved" instead of guessing** | ✓ | n/a | n/a | — |
 | **Verifies the fix over a stability window** | planned | — | — | — |
 
 ---
@@ -311,9 +384,9 @@ especially, fall back to framework defaults.
 
 ```text
  discover ──▶ collect ──▶ normalize ──▶ record ──▶ correlate ──▶ diagnose ──▶ verify
- ✅ files      ✅ output,    ✅ typed,      ✅ SQLite    planned       planned      planned
-               probes,       redacted,      + log        (incidents,   (ranked,     (stability
-               lifecycle     classified     segments     dep graph)    evidence)    window)
+ ✅ files      ✅ output,    ✅ typed,      ✅ SQLite    ✅ incidents  ✅ ranked     planned
+               probes,       redacted,      + log        dep graph,    evidence,    (stability
+               lifecycle     classified     segments     timeline      next step    window)
 ```
 
 - **Discover** reads, never runs, your project files to work out what the services are.
@@ -323,6 +396,11 @@ especially, fall back to framework defaults.
   against a pattern library (port conflicts, refused connections, database errors, panics, tracebacks, OOMs,
   test failures), with repeats folded.
 
+- **Correlate** builds a dependency graph from declared `depends_on` and port evidence (never from timing alone),
+  groups anomalies into incidents, and finds the failure that came first.
+- **Diagnose** runs [rules](docs/diagnosis-rules.md) that each propose hypotheses with supporting and
+  contradicting events, a confidence level with its reasons, and one next step. Observed facts, correlations, and
+  hypotheses are always labeled as such.
 - **Record** stores each session in a local SQLite database, with the full redacted text in append-only,
   gzipped log segments, and enforces retention. Nothing is stored that wasn't redacted first.
 
@@ -373,6 +451,7 @@ Threat model and limits: [docs/security.md](docs/security.md).
 
 - **[Architecture](docs/architecture.md)**: package map, discovery and supervision pipelines, design rules.
 - **[Events](docs/events.md)**: event schema, types, severity, backpressure, and the pattern library.
+- **[Diagnosis Rules](docs/diagnosis-rules.md)**: how incidents form, how hypotheses are ranked, every rule.
 - **[Configuration Reference](docs/configuration.md)**: every field, default, and validation rule.
 - **[Security Model](docs/security.md)**: threat model, masking/redaction limits, exec policy.
 - **[Testing Guide](docs/testing.md)**: golden files, fixtures, adding a detector.
@@ -405,6 +484,8 @@ make golden   # regenerate golden files after an intentional output change, then
   `ps -ef | grep fakesvc`. *Verify:* nothing left.
 - [ ] **Sessions:** after a run, `./bin/kestrel sessions list`, `sessions show last`, `sessions export last -o /tmp/s.json`,
   then `grep -c REDACTED /tmp/s.json`. *Verify:* the session is listed, secrets appear only as `[REDACTED:…]`.
+- [ ] **Diagnosis:** after a `watch` in which something failed, `./bin/kestrel diagnose` then `kestrel timeline`.
+  *Verify:* the incident names what failed first, every ✓/✗ line has an `evt` ID, and the next step is a command.
 - [ ] **Retention:** `./bin/kestrel cleanup --dry-run`. *Verify:* it explains what it keeps and why.
 - [ ] **Status:** while `watch` runs, run `kestrel status` in a second terminal. *Verify:* it shows liveness and
   readiness live.
