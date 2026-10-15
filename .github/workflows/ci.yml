@@ -9,39 +9,57 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  test:
+    name: Test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: gofmt
+
+      - name: Format Check (gofmt)
+        if: matrix.os == 'ubuntu-latest'
         run: |
           out="$(gofmt -l .)"
           if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
-      - name: vet
+
+      - name: Vet Code
         run: go vet ./...
-      - name: test
-        run: go test ./...
-      - name: race
-        run: go test -race ./...
-      - name: build
+
+      - name: Build Kestrel
         run: go build ./cmd/kestrel
-      - name: cross-compile
+
+      - name: Run Tests
+        run: go test ./...
+
+      - name: Race Detection Tests
+        if: matrix.os != 'windows-latest'
+        run: go test -race ./...
+
+      - name: Cross-Compile Targets
+        if: matrix.os == 'ubuntu-latest'
         run: |
           GOOS=linux   GOARCH=amd64 go build -o /dev/null ./cmd/kestrel
           GOOS=linux   GOARCH=arm64 go build -o /dev/null ./cmd/kestrel
           GOOS=darwin  GOARCH=arm64 go build -o /dev/null ./cmd/kestrel
           GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/kestrel
-      - name: staticcheck
+
+      - name: Static Analysis (staticcheck)
         if: matrix.os == 'ubuntu-latest'
         run: go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
-      - name: goreleaser config
+
+      - name: Validate GoReleaser Configuration
         if: matrix.os == 'ubuntu-latest'
         uses: goreleaser/goreleaser-action@v6
         with:

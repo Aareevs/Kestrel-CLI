@@ -1,5 +1,3 @@
-//go:build !windows
-
 package integration
 
 import (
@@ -13,8 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -172,8 +170,10 @@ func TestSessionPersistListShowExportDelete(t *testing.T) {
 			t.Fatalf("event %d: seq=%d session=%s", i, e.Seq, e.SessionID)
 		}
 	}
-	if fi, _ := os.Stat(bundlePath); fi.Mode().Perm() != 0o600 {
-		t.Errorf("export file mode %v, want 0600", fi.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		if fi, _ := os.Stat(bundlePath); fi.Mode().Perm() != 0o600 {
+			t.Errorf("export file mode %v, want 0600", fi.Mode().Perm())
+		}
 	}
 	// Export refuses to overwrite and to the same stdout path works.
 	if code, _, errs := kestrelCmd(t, home, dir, "sessions", "export", "--out", bundlePath); code != 2 || !strings.Contains(errs, "never overwrites") {
@@ -336,8 +336,8 @@ func TestKilledKestrelLeavesRecoverableSession(t *testing.T) {
 	evs := readEvents(k.stdout)
 	evs.waitFor(t, "output", 20*time.Second, func(e api.Event) bool { return strings.Contains(e.Message, "still alive") })
 	time.Sleep(400 * time.Millisecond) // let the recorder flush a batch
-	// SIGKILL only Kestrel itself (not its process group), like an OOM kill.
-	if err := syscall.Kill(k.cmd.Process.Pid, syscall.SIGKILL); err != nil {
+	// Kill only Kestrel itself (not its process group), like an OOM kill.
+	if err := k.cmd.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
 	k.cmd.Wait()
@@ -401,8 +401,8 @@ func TestStorageFailureNeverStopsSupervision(t *testing.T) {
 }
 
 func TestStorageUnwritableNeverStopsSupervision(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("permission bits are not enforced for root")
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("permission bits are not enforced here")
 	}
 	_, fake := buildBins(t)
 	home := filepath.Join(t.TempDir(), "kestrel-home")

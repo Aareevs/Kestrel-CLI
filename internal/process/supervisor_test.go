@@ -1,5 +1,3 @@
-//go:build !windows
-
 package process
 
 import (
@@ -9,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +27,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	fakesvc = filepath.Join(dir, "fakesvc")
+	if runtime.GOOS == "windows" {
+		fakesvc += ".exe"
+	}
 	if out, err := exec.Command("go", "build", "-o", fakesvc, "../../tests/fakesvc").CombinedOutput(); err != nil {
 		panic(fmt.Sprintf("building fakesvc: %v\n%s", err, out))
 	}
@@ -190,9 +192,10 @@ func TestCrashIsRecordedAndDependentsStillStart(t *testing.T) {
 // right before the dying words keeps the reader busy when the process exits,
 // which makes the race real (without the drain, the crash wins).
 func TestDyingWordsPrecedeTheExit(t *testing.T) {
-	script := `awk 'BEGIN { for (i = 0; i < 400; i++) print "working on item " i > "/dev/stderr" }'; echo "panic: last words" >&2; exit 2`
 	for i := 0; i < 10; i++ {
-		specs := []ServiceSpec{{Name: "w", Run: &Spec{Shell: script}}}
+		specs := []ServiceSpec{{Name: "w", Run: &Spec{Argv: []string{
+			fakesvc, "--burst-stderr", "400", "--exit-after", "20ms", "--exit-message", "panic: last words", "--exit-code", "2",
+		}}}}
 		_, log, cancel, done := harness(t, specs, Options{ExitWhenDone: true, StopGrace: time.Second})
 		<-done
 		cancel()

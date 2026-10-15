@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Aareevs/Kestrel-CLI/pkg/api"
@@ -235,7 +236,7 @@ func (s *Store) segmentPath(rel string) (string, error) {
 	base := sessionsDir(s.dir)
 	full := filepath.Join(base, filepath.FromSlash(rel))
 	r, err := filepath.Rel(base, full)
-	if err != nil || r == ".." || len(r) >= 3 && r[:3] == ".."+string(filepath.Separator) || filepath.IsAbs(rel) {
+	if err != nil || r == ".." || len(r) >= 3 && r[:3] == ".."+string(filepath.Separator) || filepath.IsAbs(rel) || strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, "\\") || filepath.VolumeName(rel) != "" {
 		return "", fmt.Errorf("segment path %q escapes the sessions directory", rel)
 	}
 	return full, nil

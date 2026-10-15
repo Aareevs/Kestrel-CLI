@@ -5,6 +5,7 @@ package process
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -61,9 +62,32 @@ type jobBasicAccounting struct {
 	TotalPageFaultCount, TotalProcesses, ActiveProcesses, TotalTerminatedProcesses     uint32
 }
 
+func normalizeCommandLine(line string) string {
+	line = strings.TrimSpace(line)
+	// cmd.exe parses '/' as a switch delimiter, so leading './' causes '.'
+	// to be treated as a command with switch '/...'. Replace './' with '.\'.
+	if strings.HasPrefix(line, `"./`) {
+		closing := strings.Index(line[1:], `"`)
+		if closing != -1 {
+			target := line[1 : 1+closing]
+			norm := ".\\" + strings.ReplaceAll(target[2:], "/", "\\")
+			return `"` + norm + `"` + line[1+closing+1:]
+		}
+	}
+	if strings.HasPrefix(line, "./") {
+		firstEnd := strings.IndexAny(line, " \t")
+		if firstEnd == -1 {
+			return ".\\" + strings.ReplaceAll(line[2:], "/", "\\")
+		}
+		return ".\\" + strings.ReplaceAll(line[2:firstEnd], "/", "\\") + line[firstEnd:]
+	}
+	return line
+}
+
 func shellCommand(line string) *exec.Cmd {
+	norm := normalizeCommandLine(line)
 	cmd := exec.Command("cmd.exe")
-	cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: `cmd.exe /S /C "` + line + `"`}
+	cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: `cmd.exe /S /C "` + norm + `"`}
 	return cmd
 }
 

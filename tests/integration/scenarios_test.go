@@ -1,5 +1,3 @@
-//go:build !windows
-
 package integration
 
 import (
@@ -11,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,7 +93,11 @@ services:
 		check: func(t *testing.T, rep api.DiagnosisReport) {
 			d := onlyIncident(t, rep)
 			top := d.Hypotheses[0]
-			if top.RuleID != "K001-port-conflict" || top.Confidence.Level != api.ConfidenceHigh || !strings.HasPrefix(top.NextStep.Command, "lsof -nP -iTCP:") {
+			wantCmd := "lsof -nP -iTCP:"
+			if runtime.GOOS == "windows" {
+				wantCmd = "netstat -ano | findstr :"
+			}
+			if top.RuleID != "K001-port-conflict" || top.Confidence.Level != api.ConfidenceHigh || !strings.HasPrefix(top.NextStep.Command, wantCmd) {
 				t.Fatalf("top: %s %s %q", top.RuleID, top.Confidence.Level, top.NextStep.Command)
 			}
 		},
@@ -230,6 +233,28 @@ func (n normalizer) apply(s string) string {
 	return s
 }
 
+var (
+	// The OS's "connection refused" text, from the colon to the end of the
+	// line. Kestrel truncates long lines, and the Windows wording is much
+	// longer, so the rest of such a line can't be compared across platforms.
+	refusedTailRe = regexp.MustCompile(`: connect(?:ex)?: .*$`)
+	// The port-owner command Kestrel suggests differs by platform.
+	portOwnerRe = regexp.MustCompile(`\$ (?:lsof -nP -iTCP:(\S+) -sTCP:LISTEN|netstat -ano \| findstr :(\S+))`)
+)
+
+// platformCanon folds known Windows/Unix differences together. It is only
+// applied on Windows, to both the golden and the output, so the Unix goldens
+// stay byte-exact on Unix. The exact Windows command is asserted in the
+// scenario's check instead.
+func platformCanon(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = refusedTailRe.ReplaceAllString(l, ": <connection refused>")
+	}
+	s = strings.Join(lines, "\n")
+	return portOwnerRe.ReplaceAllString(s, "$$ <who holds port $1$2>")
+}
+
 // TestScenarios is the Phase 4 exit criterion: scenarios A, B, C, D and I,
 // each a real fakesvc stack, diagnosed into reviewed golden output; and no
 // hypothesis anywhere lacks evidence IDs that exist in the session.
@@ -240,11 +265,22 @@ func TestScenarios(t *testing.T) {
 			t.Parallel()
 			home, project := t.TempDir(), t.TempDir()
 			project, _ = filepath.EvalSymlinks(project)
-			// A symlink, not a copy: macOS scans every new binary on first exec,
-			// which under parallel load can take seconds.
-			os.MkdirAll(filepath.Join(project, "bin"), 0o755)
-			if err := os.Symlink(fake, filepath.Join(project, "bin", "fakesvc")); err != nil {
-				t.Fatal(err)
+			binDir := filepath.Join(project, "bin")
+			os.MkdirAll(binDir, 0o755)
+			dest := filepath.Join(binDir, "fakesvc")
+			if runtime.GOOS == "windows" {
+				dest += ".exe"
+				data, err := os.ReadFile(fake)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(dest, data, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.Symlink(fake, dest); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			ports := map[string]int{}
@@ -285,10 +321,14 @@ func TestScenarios(t *testing.T) {
 			sc.check(t, rep)
 
 			n := normalizer{ports: ports}
+			var canon func(string) string
+			if runtime.GOOS == "windows" {
+				canon = platformCanon
+			}
 			_, text, _ := kestrelCmd(t, home, project, "diagnose", "--no-color")
-			golden(t, "scenarios/"+sc.name+".diagnose.txt", n.apply(text))
+			goldenWith(t, "scenarios/"+sc.name+".diagnose.txt", n.apply(text), canon)
 			_, tl, _ := kestrelCmd(t, home, project, "timeline", "--no-color")
-			golden(t, "scenarios/"+sc.name+".timeline.txt", n.apply(tl))
+			goldenWith(t, "scenarios/"+sc.name+".timeline.txt", n.apply(tl), canon)
 		})
 	}
 }

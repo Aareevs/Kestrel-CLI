@@ -1,214 +1,24 @@
-//go:build !windows
-
 package integration
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Aareevs/Kestrel-CLI/internal/cli"
 	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
-
-// Binaries built once for the subprocess tests.
-var bins struct {
-	once    sync.Once
-	dir     string
-	kestrel string
-	fakesvc string
-	err     error
-}
-
-func buildBins(t *testing.T) (kestrel, fakesvc string) {
-	t.Helper()
-	bins.once.Do(func() {
-		bins.dir, bins.err = os.MkdirTemp("", "kestrel-it")
-		if bins.err != nil {
-			return
-		}
-		bins.kestrel = filepath.Join(bins.dir, "kestrel")
-		bins.fakesvc = filepath.Join(bins.dir, "fakesvc")
-		for out, pkg := range map[string]string{bins.kestrel: "../../cmd/kestrel", bins.fakesvc: "../fakesvc"} {
-			if b, err := exec.Command("go", "build", "-o", out, pkg).CombinedOutput(); err != nil {
-				bins.err = fmt.Errorf("go build %s: %v\n%s", pkg, err, b)
-				return
-			}
-		}
-	})
-	if bins.err != nil {
-		t.Fatal(bins.err)
-	}
-	return bins.kestrel, bins.fakesvc
-}
-
-func freePort(t *testing.T) int {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
-	return ln.Addr().(*net.TCPAddr).Port
-}
-
-// kestrelProc is a kestrel subprocess in its own process group, so a
-// terminal-style Ctrl-C can be sent to the group without touching the test.
-type kestrelProc struct {
-	cmd    *exec.Cmd
-	stdout io.ReadCloser
-	stderr *bytes.Buffer
-}
-
-func startKestrel(t *testing.T, home string, args ...string) *kestrelProc {
-	t.Helper()
-	k, _ := buildBins(t)
-	cmd := exec.Command(k, args...)
-	cmd.Env = append(os.Environ(), "KESTREL_HOME="+home, "NO_COLOR=1")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var errb bytes.Buffer
-	cmd.Stderr = &errb
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		// Never leave a stray kestrel behind if a test fails midway.
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	})
-	return &kestrelProc{cmd: cmd, stdout: out, stderr: &errb}
-}
-
-// ctrlC delivers SIGINT the way a terminal does: to kestrel's process group.
-// Supervised services live in their own groups and do not receive it.
-func (k *kestrelProc) ctrlC() { _ = syscall.Kill(-k.cmd.Process.Pid, syscall.SIGINT) }
-
-func (k *kestrelProc) wait(t *testing.T, timeout time.Duration) int {
-	t.Helper()
-	done := make(chan error, 1)
-	go func() { done <- k.cmd.Wait() }()
-	select {
-	case err := <-done:
-		if ee, ok := err.(*exec.ExitError); ok {
-			return ee.ExitCode()
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		return 0
-	case <-time.After(timeout):
-		t.Fatalf("kestrel did not exit within %v; stderr:\n%s", timeout, k.stderr)
-		return -1
-	}
-}
-
-// eventStream reads NDJSON events and lets tests wait for conditions.
-type eventStream struct {
-	mu   sync.Mutex
-	evs  []api.Event
-	done chan struct{}
-}
-
-func readEvents(r io.Reader) *eventStream {
-	s := &eventStream{done: make(chan struct{})}
-	go func() {
-		defer close(s.done)
-		sc := bufio.NewScanner(r)
-		sc.Buffer(make([]byte, 1<<20), 1<<20)
-		for sc.Scan() {
-			var ev api.Event
-			if json.Unmarshal(sc.Bytes(), &ev) == nil {
-				s.mu.Lock()
-				s.evs = append(s.evs, ev)
-				s.mu.Unlock()
-			}
-		}
-	}()
-	return s
-}
-
-func (s *eventStream) count(f func(api.Event) bool) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	n := 0
-	for _, e := range s.evs {
-		if f(e) {
-			n++
-		}
-	}
-	return n
-}
-
-func (s *eventStream) waitFor(t *testing.T, what string, timeout time.Duration, f func(api.Event) bool) {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for s.count(f) == 0 {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s; events:\n%s", what, s.dump())
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-}
-
-func (s *eventStream) dump() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var b strings.Builder
-	for _, e := range s.evs {
-		fmt.Fprintf(&b, "%d %s %s %s\n", e.Seq, e.ServiceID, e.Type, e.Message)
-	}
-	return b.String()
-}
-
-func pidsFrom(t *testing.T, path string, want int) []int {
-	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		b, _ := os.ReadFile(path)
-		var pids []int
-		for _, f := range strings.Fields(string(b)) {
-			if n, err := strconv.Atoi(f); err == nil {
-				pids = append(pids, n)
-			}
-		}
-		if len(pids) >= want || time.Now().After(deadline) {
-			if len(pids) < want {
-				t.Fatalf("only %d of %d PIDs recorded", len(pids), want)
-			}
-			return pids
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-}
-
-func alive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return err == nil || err == syscall.EPERM
-}
-
-// running reports whether pid is a live process, not a zombie: an unreaped
-// dead child still answers kill(pid, 0), so that alone proves nothing.
-func running(pid int) bool {
-	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
-	st := strings.TrimSpace(string(out))
-	return err == nil && st != "" && !strings.HasPrefix(st, "Z")
-}
 
 // TestWatchCtrlCLeavesNoOrphans is the Phase 2 exit criterion: watch runs
 // three fakesvc services (with children, one ignoring SIGTERM), Ctrl-C stops
@@ -308,15 +118,6 @@ services:
 	}
 }
 
-// rssKB returns the resident set size of pid in KiB.
-func rssKB(pid int) (int, error) {
-	out, err := exec.Command("ps", "-o", "rss=", "-p", strconv.Itoa(pid)).Output()
-	if err != nil {
-		return 0, err
-	}
-	return strconv.Atoi(strings.TrimSpace(string(out)))
-}
-
 // TestFloodKeepsMemoryBounded is the Phase 2 memory criterion: a service
 // writing 50 MB/min while the consumer of Kestrel's output reads slowly.
 // Kestrel must drop info lines (and say so) instead of growing.
@@ -337,6 +138,7 @@ func TestFloodKeepsMemoryBounded(t *testing.T) {
 	var sawOverload sync.WaitGroup
 	sawOverload.Add(1)
 	var once sync.Once
+	var stopping atomic.Bool
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
@@ -349,7 +151,9 @@ func TestFloodKeepsMemoryBounded(t *testing.T) {
 			if err != nil {
 				return
 			}
-			time.Sleep(200 * time.Millisecond)
+			if !stopping.Load() {
+				time.Sleep(200 * time.Millisecond)
+			}
 		}
 	}()
 
@@ -361,6 +165,7 @@ func TestFloodKeepsMemoryBounded(t *testing.T) {
 			samples = append(samples, kb)
 		}
 	}
+	stopping.Store(true)
 	k.ctrlC()
 	code := k.wait(t, 30*time.Second)
 	<-readDone

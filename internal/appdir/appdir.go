@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // EnvOverride names the variable that overrides the data directory.
@@ -35,8 +36,10 @@ func resolve(goos string, getenv func(string) string, home string) (string, bool
 		}
 		return "", false, errors.New("LOCALAPPDATA is not set; set " + EnvOverride)
 	default:
-		if v := getenv("XDG_DATA_HOME"); v != "" && filepath.IsAbs(v) {
-			return filepath.Join(v, "kestrel"), false, nil
+		xdg := getenv("XDG_DATA_HOME")
+		xdgAbs := filepath.IsAbs(xdg) || (goos != "windows" && strings.HasPrefix(xdg, "/"))
+		if xdg != "" && xdgAbs {
+			return filepath.Join(xdg, "kestrel"), false, nil
 		}
 		if home == "" {
 			return "", false, errors.New("cannot determine home directory; set " + EnvOverride)

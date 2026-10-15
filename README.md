@@ -555,13 +555,14 @@ Threat model and limits: [docs/security.md](docs/security.md).
 
 | | macOS | Linux | Windows |
 | :--- | :---: | :---: | :---: |
-| Discovery, diagnosis, timelines, sessions, MCP | ✅ tested (CI) | ✅ tested (CI) | builds; untested |
-| Supervision (process groups, clean Ctrl-C) | ✅ tested | ✅ tested | Job Objects; untested |
+| Discovery, diagnosis, timelines, sessions, MCP | ✅ tested (CI) | ✅ tested (CI) | ✅ tested (CI) |
+| Supervision (process groups, clean Ctrl-C) | ✅ tested | ✅ tested | ✅ tested (Job Objects) |
 | Services survive `kill -9` of Kestrel? | can (no parent-death signal on macOS) | no (`Pdeathsig`) | no (job closes) |
-| `verify` command checks | ✅ tested | ✅ tested | `cmd.exe /C`; untested |
+| `verify` command checks | ✅ tested | ✅ tested | ✅ tested (`cmd.exe /C`) |
 | Install script / Homebrew | from the first release | from the first release | download the `.zip` |
 
-Binaries are static (pure-Go SQLite, no cgo). They are not notarized for macOS; see
+Binaries are static (pure-Go SQLite, no cgo). Windows is tested across all packages in CI via native Job Objects
+containment and `cmd.exe` process trees (Go's `-race` detector is skipped on Windows runners). They are not notarized for macOS; see
 [docs/releasing.md](docs/releasing.md#notes).
 
 ---

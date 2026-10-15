@@ -1,5 +1,3 @@
-//go:build !windows
-
 package integration
 
 import (
@@ -34,7 +32,11 @@ func fakeRelease(t *testing.T, version string) (dir, archive string) {
 	f, _ := os.Create(filepath.Join(dir, archive))
 	gz := gzip.NewWriter(f)
 	tw := tar.NewWriter(gz)
-	for name, body := range map[string][]byte{"kestrel": bin, "LICENSE": []byte("MIT\n")} {
+	binName := "kestrel"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	for name, body := range map[string][]byte{binName: bin, "LICENSE": []byte("MIT\n")} {
 		tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(body))})
 		tw.Write(body)
 	}
@@ -52,6 +54,9 @@ func fakeRelease(t *testing.T, version string) (dir, archive string) {
 
 func runInstaller(t *testing.T, env ...string) (int, string) {
 	t.Helper()
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not found in PATH")
+	}
 	root, _ := filepath.Abs("../..")
 	cmd := exec.Command("sh", filepath.Join(root, "scripts", "install.sh"))
 	cmd.Env = append(os.Environ(), env...)
@@ -66,8 +71,14 @@ func runInstaller(t *testing.T, env ...string) (int, string) {
 }
 
 func TestInstallScript(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("install.sh is a Unix shell installer; Windows uses release zips")
+	}
 	if _, err := exec.LookPath("curl"); err != nil {
 		t.Skip("needs curl")
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("needs sh")
 	}
 	dir, archive := fakeRelease(t, "1.2.3")
 	dest := filepath.Join(t.TempDir(), "bin")
@@ -77,7 +88,11 @@ func TestInstallScript(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "checksum verified") {
 		t.Fatalf("install: exit %d\n%s", code, out)
 	}
-	if v, err := exec.Command(filepath.Join(dest, "kestrel"), "version").Output(); err != nil || !strings.HasPrefix(string(v), "kestrel ") {
+	binName := "kestrel"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	if v, err := exec.Command(filepath.Join(dest, binName), "version").Output(); err != nil || !strings.HasPrefix(string(v), "kestrel ") {
 		t.Fatalf("installed binary doesn't run: %v %s", err, v)
 	}
 
@@ -103,6 +118,9 @@ func TestInstallScript(t *testing.T) {
 // The Homebrew formula is rendered from a release's checksums.txt: every
 // platform's URL and checksum come from it, and a missing archive is an error.
 func TestHomebrewFormula(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("needs sh")
+	}
 	root, _ := filepath.Abs("../..")
 	script := filepath.Join(root, "scripts", "homebrew-formula.sh")
 	dir := t.TempDir()

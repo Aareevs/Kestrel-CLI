@@ -29,8 +29,12 @@ func TestResolve(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			if got != filepath.FromSlash(tt.want) || over != tt.overridden {
-				t.Fatalf("got %q (overridden=%v), want %q (%v)", got, over, tt.want, tt.overridden)
+			want := filepath.FromSlash(tt.want)
+			if tt.name == "override" {
+				want, _ = filepath.Abs(tt.env["KESTREL_HOME"])
+			}
+			if got != want || over != tt.overridden {
+				t.Fatalf("got %q (overridden=%v), want %q (%v)", got, over, want, tt.overridden)
 			}
 		})
 	}

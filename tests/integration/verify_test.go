@@ -1,5 +1,3 @@
-//go:build !windows
-
 package integration
 
 import (
@@ -10,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -65,8 +64,20 @@ func TestScenarioERecovery(t *testing.T) {
 	home, project := t.TempDir(), t.TempDir()
 	project, _ = filepath.EvalSymlinks(project)
 	os.MkdirAll(filepath.Join(project, "bin"), 0o755)
-	if err := os.Symlink(fake, filepath.Join(project, "bin", "fakesvc")); err != nil {
-		t.Fatal(err)
+	dest := filepath.Join(project, "bin", "fakesvc")
+	if runtime.GOOS == "windows" {
+		dest += ".exe"
+		data, err := os.ReadFile(fake)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dest, data, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		if err := os.Symlink(fake, dest); err != nil {
+			t.Fatal(err)
+		}
 	}
 	port := freePort(t)
 	fixed := filepath.Join(project, "fixed")
@@ -252,8 +263,11 @@ verify:
 // explicit yes at a prompt.
 func TestVerifyRefusesExecWithoutAuthorization(t *testing.T) {
 	home := t.TempDir()
-	project := execProject(t, `    - { type: command, run: "touch ran-marker", timeout: 5s }
-`)
+	touchCmd := "touch ran-marker"
+	if runtime.GOOS == "windows" {
+		touchCmd = "cmd /c type nul > ran-marker"
+	}
+	project := execProject(t, fmt.Sprintf("    - { type: command, run: %q, timeout: 5s }\n", touchCmd))
 	marker := filepath.Join(project, "ran-marker")
 
 	// No flag, no terminal (stdin is /dev/null): refused.
@@ -262,13 +276,13 @@ func TestVerifyRefusesExecWithoutAuthorization(t *testing.T) {
 		t.Fatal("the command ran without authorization")
 	}
 	c := checkOf(rep, api.CheckKindCommand, "")
-	if c == nil || c.Status != api.CheckSkipped || !strings.Contains(c.SkipReason, "--allow-exec") || c.Target != "touch ran-marker" {
+	if c == nil || c.Status != api.CheckSkipped || !strings.Contains(c.SkipReason, "--allow-exec") || c.Target != touchCmd {
 		t.Fatalf("command check: %+v", c)
 	}
 	if code != 0 || rep.Verdict != api.VerdictResolved || rep.Session != nil || rep.Saved {
 		t.Fatalf("health-only verify: exit %d verdict %s session %v saved %v", code, rep.Verdict, rep.Session, rep.Saved)
 	}
-	if !strings.Contains(strings.Join(rep.Reasons, " "), "not run: command `touch ran-marker`") {
+	if !strings.Contains(strings.Join(rep.Reasons, " "), "not run: command `"+touchCmd+"`") {
 		t.Fatalf("the skipped command should be listed among the reasons: %v", rep.Reasons)
 	}
 
@@ -286,9 +300,12 @@ func TestVerifyCommandFailureTimeoutAndRedaction(t *testing.T) {
 	_, fake := buildBins(t)
 	home := t.TempDir()
 	pidfile := filepath.Join(t.TempDir(), "pids")
-	project := execProject(t, fmt.Sprintf(`    - { type: command, run: "echo 'FAIL: login with token=sup3rs3cret'; exit 3", timeout: 5s }
-    - { type: command, run: "%s --sleep --pidfile %s", timeout: 300ms }
-`, fake, pidfile))
+	failCmd := "echo 'FAIL: login with token=sup3rs3cret'; exit 3"
+	if runtime.GOOS == "windows" {
+		failCmd = "echo FAIL: login with token=sup3rs3cret & exit 3"
+	}
+	project := execProject(t, fmt.Sprintf("    - { type: command, run: %q, timeout: 5s }\n    - { type: command, run: %q, timeout: 300ms }\n",
+		failCmd, fmt.Sprintf("%s --sleep --pidfile %s", fake, pidfile)))
 
 	code, rep, _ := verifyJSON(t, home, project, "--window", "500ms", "--interval", "250ms", "--allow-exec")
 	if code != 1 || rep.Verdict != api.VerdictPartiallyResolved {
@@ -320,8 +337,11 @@ func TestVerifyCommandFailureTimeoutAndRedaction(t *testing.T) {
 // directory and timeout, and only an explicit yes runs it.
 func TestVerifyPromptInProcess(t *testing.T) {
 	t.Setenv("KESTREL_HOME", t.TempDir())
-	project := execProject(t, `    - { type: command, run: "touch ran-marker", timeout: 7s }
-`)
+	touchCmd := "touch ran-marker"
+	if runtime.GOOS == "windows" {
+		touchCmd = "cmd /c type nul > ran-marker"
+	}
+	project := execProject(t, fmt.Sprintf("    - { type: command, run: %q, timeout: 7s }\n", touchCmd))
 	marker := filepath.Join(project, "ran-marker")
 	runWith := func(answer string) (int, string, string) {
 		var out, errb bytes.Buffer
@@ -336,7 +356,7 @@ func TestVerifyPromptInProcess(t *testing.T) {
 		if _, err := os.Stat(marker); err == nil {
 			t.Fatalf("answer %q ran the command", answer)
 		}
-		if !strings.Contains(errs, "touch ran-marker") || !strings.Contains(errs, project) || !strings.Contains(errs, "7s") {
+		if !strings.Contains(errs, touchCmd) || !strings.Contains(errs, project) || !strings.Contains(errs, "7s") {
 			t.Fatalf("the prompt must show the command, directory and timeout:\n%s", errs)
 		}
 		if code != 0 || !strings.Contains(out, "declined at the prompt") {
