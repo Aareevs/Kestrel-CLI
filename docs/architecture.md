@@ -6,7 +6,7 @@
 cmd/kestrel/            main: signal-aware context → internal/cli.Execute → os.Exit
 internal/cli/           cobra commands, global flags, exit-code mapping, rendering choice
 internal/app/           use cases shared by the CLI and (later) MCP: Inspect, ProposeConfig,
-                        WriteConfig, LoadConfig, ValidateConfig, Doctor
+                        WriteConfig, LoadConfig, ValidateConfig, Doctor, Watch, Diagnose, Verify
 internal/config/        kestrel.yaml schema, strict decoding, validation with line numbers,
                         defaults, ${ENV} references, masking for display
 internal/discovery/     bounded, read-only project scan → service candidates
@@ -17,6 +17,7 @@ internal/storage/       SQLite sessions + events, log segments, migrations, rete
 internal/graph/         dependency graph: declared depends_on + port evidence (never timing)
 internal/correlation/   anomalies → incidents, initiating failure, timelines
 internal/diagnosis/     rule engine; rules/ holds K001–K006
+internal/verification/  stability-window sampling, verdicts, authorized command checks
 internal/collectors/    line framing, repeat folding, bounded buffer with backpressure
 internal/health/        http/tcp/process probes, readiness state machine
 internal/process/       process groups / Job Objects, graceful-then-forced stop, supervisor
@@ -164,6 +165,23 @@ A post-pass then reconciles the results:
   before recording the exit, so the line that explains a crash always has an earlier `seq` than the crash.
 - **Counting.** A repeat summary stands for exactly `attrs.repeats` folded lines (`Event.Lines()`). Timelines
   merge it into the run it continues.
+
+## Verification
+
+```text
+ session + incident ──▶ choose checks ──▶ authorize commands ──▶ sample window ──▶ run commands ──▶ verdict
+ (before, recovery)     (probes, refused     (--allow-exec or       (every interval;    (own process     (saved with
+                         addresses, liveness)  a y at a prompt)      new live events)     group, timeout)  the session)
+```
+
+- `internal/verification` holds the pure parts: `Run` samples probes across the window (sleep and polling are
+  injectable), `Decide` turns observations into a verdict with reasons, and `RunCommand` runs a command, but only
+  when handed an `Authorization`. It never decides authorization itself. The CLI does that.
+- `internal/app.Verify` picks the session and incident, chooses checks from the evidence, and, for a live session,
+  reads the events recorded after its starting point. The running `watch` process is the only writer; verify only
+  reads the database (WAL) and the live status file.
+- Reports are stored in `verifications` (migration 003, `ON DELETE CASCADE` with the session) and listed by
+  `timeline`.
 
 ## Config
 

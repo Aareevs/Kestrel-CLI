@@ -1,5 +1,101 @@
 # Progress
 
+## Phase 5: Verification (2026-10-15)
+
+### Built
+
+- `internal/verification`: `Run` samples every check once per interval across the whole stability window (a pass
+  on the first sample ends nothing), and each check ends `passed`, `flaky`, or `failed`. `Decide` turns that, plus
+  any recurring errors, into `resolved`, `partially_resolved`, `still_failing`, or `inconclusive`, with reasons.
+  `RunCommand` runs a configured command in its own process group, with a timeout and a redacted 20-line output
+  tail, and only when it is handed an `Authorization`.
+- `kestrel verify` (`internal/app/verify.go`, `internal/cli/verify.go`): verifies the latest incident of the
+  latest session (or `[session] --incident N`). Checks come from the evidence: the affected services' health
+  probes, the exact addresses they failed to connect to, process liveness from a live session, plus
+  `verify.checks`. While `kestrel watch` is still recording, the session's new events are compared with the
+  incident's (before/after). Exit codes: 0 resolved, 1 partially resolved or still failing, 3 inconclusive.
+- **Exec authorization:** a command check runs only with `--allow-exec`, or after a prompt that shows the exact
+  command (secrets masked), the directory, and the timeout gets an explicit `y`. No terminal means no prompt and
+  no exec.
+- Results are stored with their session (migration 003, deleted with it) and listed by `kestrel timeline`.
+- Docs: [verification.md](verification.md), plus updates to the README, configuration, security (exec policy),
+  architecture, events, and testing docs.
+
+### Exit criteria
+
+> Scenario E passes; `verify` refuses to exec without authorization (tested).
+
+Met.
+
+- **Scenario E** (`TestScenarioERecovery`, real `kestrel watch` and `fakesvc`):
+  - **Broken:** `still_failing`, exit 1.
+  - **Fix landing mid-window:** the probe is `flaky`, and the verdict is not `resolved`.
+  - **Recovery:** recorded as `probe_recovered`.
+  - **Stable for the full window:** `resolved`, exit 0, 9/9 samples, never before the 2s window has elapsed, and
+    the recovery evidence is that exact event.
+  - **Relapse mid-window:** not `resolved`, and the new failure is cited from the live session.
+  - **Evidence:** every cited event exists in the session export.
+- **Exec refused without authorization:**
+  - `TestVerifyRefusesExecWithoutAuthorization`: with no terminal and no flag, a `touch` command does not run;
+    with `--allow-exec`, it does. I checked that this test fails against a deliberately broken authorizer.
+  - `TestVerifyPromptInProcess`: empty, `n`, `nope`, and EOF answers all decline, `y` runs it, and the prompt
+    shows the command, the directory, and the timeout.
+  - Timeout and redaction: a timed-out command's process is gone afterwards, and a secret in a failing command's
+    output is redacted.
+
+Stability: the full integration suite passed 9 of 9 runs, 3 of them under 8 CPU hogs. The scenarios alone passed
+12 of 12, 6 under load.
+
+### Bugs found while building this (fixed in this PR)
+
+- **Two Kestrel processes opening a new data directory at the same moment broke storage for one of them** (Phase
+  3). Both ran the migrations, and the loser failed with "table sessions already exists". `watch` then recorded
+  *nothing* for its whole session, for example when started alongside `status` on first use. A second, rarer
+  failure: SQLite answers `SQLITE_BUSY` at once, without waiting, to a connection made while another process
+  switches the new file to WAL. Fixes: each migration takes the write lock first (`BEGIN IMMEDIATE`) and is
+  re-checked under it, and Open retries a busy first connection for up to 5s. `TestConcurrentFirstOpen` (8
+  concurrent opens × 5 rounds) failed on the old code and passed 150 rounds under `-race` and CPU load.
+- **`/dev/null` counted as a terminal** (Phase 1). The check was "is a character device", which `/dev/null` is,
+  so a script piping from `/dev/null` was shown a prompt (`sessions delete` too). It failed safe (EOF means no),
+  but terminal detection now uses a real TTY check (`go-isatty`, already in the module graph).
+- **`fakesvc --sleep` died instantly** ("all goroutines are asleep": `select {}` with nothing else running). Every
+  child process in the Phase 2 orphan tests was therefore already dead, so for them "no orphans" proved nothing.
+  Fixed, and both orphan tests now first assert that every recorded PID is really running. They use `ps`, since a
+  zombie still answers `kill(pid, 0)`. With the old fakesvc, both tests now fail. Shutdown with a SIGTERM-ignoring
+  grandchild really takes the grace period plus SIGKILL (about 0.5s).
+- **Two Phase 4 scenario flakes**, which showed up in repeated full-suite runs:
+  - **A:** the golden assumed an event order that depended on machine speed (the database's probe timeout vs.
+    api's first refused connection). The timeout is now 2s, the test waits for it explicitly, and the order
+    follows from causality.
+  - **B:** the port the test holds was chosen by opening and closing a listener, and another parallel test could
+    take it in between. The test now opens its listener on port 0 first.
+
+### Quality checks (darwin/arm64, go1.26.2)
+
+| Check | Result |
+|---|---|
+| `gofmt -l .` | no output |
+| `go vet ./...` | pass, plus `GOOS=windows go vet ./internal/...` |
+| `go test ./...` | pass (15 packages) |
+| `go test -race ./...` | pass |
+| builds: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64 | pass |
+| `staticcheck@2025.1.1` | pass |
+| Coverage (`-short`, `-coverpkg=./internal/...,./pkg/...`) | 86.8% overall; verification 97.8%, `app/verify.go` 81.4% |
+
+### Known gaps and limitations
+
+- **Repeat folding vs. short windows:** an error that repeats unchanged is recorded as one summary at least every
+  10s, so a window shorter than 10s may not see it recur. Verify notes this. The default 30s window always does.
+- **Comparing events needs a live session:** after `watch` has stopped, verify can only probe and run commands,
+  and it says so.
+- **Skipped commands:** a skipped command check is listed under "not run" but doesn't prevent `resolved`.
+- **Windows is untested:** command checks there (`cmd.exe /C`, Job Object stop on timeout) are built but not run,
+  like the rest of Windows supervision.
+- **No `verification_result` events:** verify doesn't write events into the session, because only the recording
+  process assigns `seq`. Results are reports kept alongside the session.
+- **Liveness depends on the status file:** liveness checks read the running session's status file, which is
+  refreshed every 250ms.
+
 ## Phase 4: Correlation and diagnosis (2026-10-15)
 
 ### Built
