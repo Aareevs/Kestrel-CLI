@@ -347,7 +347,7 @@ func TestKilledKestrelLeavesRecoverableSession(t *testing.T) {
 	if len(l.Sessions) != 1 || l.Sessions[0].Status != api.SessionInterrupted || l.Sessions[0].EndedAt.IsZero() || l.Sessions[0].Events == 0 {
 		t.Fatalf("after kill -9: %+v", l.Sessions)
 	}
-	_, out, _ = kestrelCmd(t, home, dir, "sessions", "export", l.Sessions[0].ID)
+	_, out, _ = kestrelCmd(t, home, dir, "sessions", "export", l.Sessions[0].ID, "--all")
 	b := decode[api.ExportBundle](t, out)
 	if !strings.Contains(out, "still alive") || len(b.Events) != l.Sessions[0].Events {
 		t.Fatalf("interrupted session not fully readable: %d events", len(b.Events))
@@ -490,3 +490,115 @@ func TestFloodIsPersistedWithDropAccounting(t *testing.T) {
 }
 
 func humanKiB(n int64) string { return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20)) }
+
+// In-process coverage of the sessions/cleanup commands and their renderers:
+// the same behavior as the subprocess tests, but visible to coverage tooling
+// and able to drive the interactive confirmation.
+func TestSessionsCommandsInProcess(t *testing.T) {
+	_, fake := buildBins(t)
+	home := t.TempDir()
+	t.Setenv("KESTREL_HOME", home)
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty state is explained, not an error.
+	if r := run(t, dir, nil, "sessions", "list", "--no-color"); r.code != 0 || !strings.Contains(r.stdout, "No sessions recorded for this project") {
+		t.Fatalf("empty list: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	if r := run(t, dir, nil, "sessions", "show"); r.code != 2 || !strings.Contains(r.stderr, "none recorded yet") {
+		t.Fatalf("show with nothing: exit %d %s", r.code, r.stderr)
+	}
+
+	for _, args := range [][]string{
+		{"run", "--quiet", "--name", "web", "--", fake, "--name", "web", "--exit-after", "200ms"},
+		{"run", "--quiet", "--name", "api", "--", fake, "--name", "api", "--secrets", "--connect", "127.0.0.1:1", "--connect-every", "50ms", "--exit-after", "500ms", "--exit-code", "2"},
+	} {
+		run(t, dir, nil, args...)
+		time.Sleep(10 * time.Millisecond) // distinct start times
+	}
+
+	r := run(t, dir, nil, "sessions", "list", "--no-color")
+	if r.code != 0 || strings.Count(r.stdout, "closed") != 2 || !strings.Contains(r.stdout, "web") || !strings.Contains(r.stdout, "api") || !strings.Contains(r.stdout, "KiB") {
+		t.Fatalf("list:\n%s", r.stdout)
+	}
+	list := decode[api.SessionList](t, run(t, dir, nil, "sessions", "list", "--format", "json", "-n", "1").stdout)
+	if len(list.Sessions) != 1 || list.Sessions[0].Services[0] != "api" {
+		t.Fatalf("-n 1 should return only the newest (api) session: %+v", list.Sessions)
+	}
+	apiID := list.Sessions[0].ID
+
+	r = run(t, dir, nil, "sessions", "show", "--no-color")
+	for _, want := range []string{"Session  " + apiID, "crashed", "Events by type", "Notable events", "dependency_conn_failed", "kestrel sessions export"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("show lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	if r := run(t, dir, nil, "sessions", "show", "--quiet", "--session", apiID[:10]); r.code != 0 || strings.Contains(r.stdout, "kestrel sessions export") {
+		t.Fatalf("show --quiet/--session: exit %d\n%s", r.code, r.stdout)
+	}
+	// Prefixes shared by both sessions are ambiguous.
+	if r := run(t, dir, nil, "sessions", "show", apiID[:6]); r.code != 2 || !strings.Contains(r.stderr, "ambiguous") {
+		t.Fatalf("ambiguous prefix: exit %d %s", r.code, r.stderr)
+	}
+	// Another project can't see them unless --all.
+	other, _ := filepath.EvalSymlinks(t.TempDir())
+	if r := run(t, other, nil, "sessions", "show", apiID); r.code != 2 || !strings.Contains(r.stderr, "--all") {
+		t.Fatalf("cross-project show: exit %d %s", r.code, r.stderr)
+	}
+	if r := run(t, other, nil, "sessions", "show", apiID, "--all"); r.code != 0 {
+		t.Fatalf("show --all: exit %d %s", r.code, r.stderr)
+	}
+
+	exp := run(t, dir, nil, "sessions", "export", apiID)
+	bundle := decode[api.ExportBundle](t, exp.stdout)
+	if exp.code != 0 || bundle.Session.ID != apiID || strings.Contains(exp.stdout, "sup3rs3cret") || !strings.Contains(exp.stdout, "[REDACTED:") {
+		t.Fatalf("export: exit %d, redacted=%v", exp.code, !strings.Contains(exp.stdout, "sup3rs3cret"))
+	}
+
+	// Delete: refuses without confirmation when not a terminal...
+	if r := run(t, dir, nil, "sessions", "delete", apiID); r.code != 2 || !strings.Contains(r.stderr, "--yes") {
+		t.Fatalf("delete without tty: exit %d %s", r.code, r.stderr)
+	}
+	// ...declining keeps it, confirming removes it.
+	no, yes := "n\n", "yes\n"
+	// The prompt names the real session even when asked about "last".
+	if r := run(t, dir, &no, "sessions", "delete", "last"); r.code != 0 || !strings.Contains(r.stdout, apiID) || !strings.Contains(r.stdout, "Nothing deleted") {
+		t.Fatalf("declined: exit %d\n%s", r.code, r.stdout)
+	}
+	if r := run(t, dir, nil, "sessions", "show", apiID); r.code != 0 {
+		t.Fatal("declined delete must keep the session")
+	}
+	if r := run(t, dir, &yes, "sessions", "delete", apiID); r.code != 0 || !strings.Contains(r.stdout, "deleted "+apiID) {
+		t.Fatalf("confirmed delete: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	if r := run(t, dir, nil, "sessions", "delete", "nope", "--yes"); r.code != 2 {
+		t.Fatalf("delete unknown: exit %d", r.code)
+	}
+
+	// Cleanup text and JSON, including the removal list.
+	webID := decode[api.SessionList](t, run(t, dir, nil, "sessions", "list", "--format", "json").stdout).Sessions[0].ID
+	if r := run(t, dir, nil, "cleanup", "--no-color"); r.code != 0 || !strings.Contains(r.stdout, "Nothing to remove: 1 session(s) kept") {
+		t.Fatalf("cleanup nothing: exit %d\n%s", r.code, r.stdout)
+	}
+	backdate(t, home, webID, 30*24*time.Hour)
+	r = run(t, dir, nil, "cleanup", "--dry-run", "--no-color")
+	for _, want := range []string{"Would remove 1 session(s)", webID, "older than the retention window", "Dry run: nothing was deleted"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("dry-run lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	r = run(t, dir, nil, "cleanup", "--no-color")
+	if r.code != 0 || !strings.Contains(r.stdout, "Removed 1 session(s)") || !strings.Contains(r.stdout, "freed") {
+		t.Fatalf("cleanup: exit %d\n%s", r.code, r.stdout)
+	}
+	if r := run(t, dir, nil, "sessions", "list", "--all", "--no-color"); !strings.Contains(r.stdout, "No sessions recorded yet") {
+		t.Fatalf("after cleanup:\n%s", r.stdout)
+	}
+
+	// Doctor reports storage.
+	if r := run(t, dir, nil, "doctor", "--no-color"); r.code != 0 || !strings.Contains(r.stdout, "storage") || !strings.Contains(r.stdout, "0 session(s), schema v1") {
+		t.Fatalf("doctor: exit %d\n%s", r.code, r.stdout)
+	}
+}
