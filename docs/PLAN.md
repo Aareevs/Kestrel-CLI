@@ -79,4 +79,3 @@ we are executing it, the decisions made along the way, and the risks we are watc
 - The hand-written `.gitignore` matcher does not implement every corner of git's semantics (documented).
 - Go 1.26 vs. staticcheck release compatibility; CI pins a version and we record what actually ran.
 - Windows Job Objects (Phase 2) cannot be exercised on this macOS machine; only cross-compiled.
-- No license chosen yet; needs the owner's decision.

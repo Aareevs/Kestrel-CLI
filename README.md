@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/macOS-27272a?style=flat-square&logo=apple&logoColor=white" alt="macOS" />
   <img src="https://img.shields.io/badge/Linux-27272a?style=flat-square&logo=linux&logoColor=white" alt="Linux" />
   <img src="https://img.shields.io/badge/Windows-27272a?style=flat-square&logo=windows&logoColor=white" alt="Windows" />
-  <img src="https://img.shields.io/badge/License-TBD-52525b?style=flat-square&labelColor=18181b" alt="License: TBD" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-10b981?style=flat-square&labelColor=18181b" alt="License: MIT" /></a>
 </p>
 
 <p align="center">
@@ -369,4 +369,4 @@ adds a new ecosystem. Run `make check` before opening a PR.
 
 ## License
 
-Not yet chosen.
+MIT License. See [LICENSE](LICENSE).

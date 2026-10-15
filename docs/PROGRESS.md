@@ -144,5 +144,5 @@ The GitHub Actions workflow is written but hasn't run yet: there's no remote.
   aren't detected.
 - Compose: only the first published port per service is used. Override files (`compose.override.yaml`) and
   profiles are ignored.
-- No license chosen yet.
+- (Resolved after this phase: MIT license added.)
 - `docs/assets/demo.gif` hasn't been generated (VHS isn't installed). Only the `.tape` is committed.
