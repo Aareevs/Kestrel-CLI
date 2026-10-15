@@ -1,0 +1,16 @@
+# Demo stack for docs/assets/demo.tape: a database that fails to start, an
+# API that depends on it, and a frontend that proxies to the API. The services
+# are tests/fakesvc stand-ins (built to ./bin/fakesvc by the tape).
+version: 1
+services:
+  - name: database
+    command: './bin/fakesvc --name database --exit-after 300ms --exit-code 1 --exit-message "FATAL:  database files are incompatible with server"'
+    health: { type: tcp, address: "127.0.0.1:15432", interval: 100ms, timeout: 100ms, retries: 2, startup_grace: 2s }
+  - name: api
+    command: './bin/fakesvc --name api --connect 127.0.0.1:15432 --connect-every 150ms --listen 127.0.0.1:18080 --listen-after 60s'
+    depends_on: [database]
+    health: { type: http, url: "http://127.0.0.1:18080/health", interval: 100ms, timeout: 100ms, retries: 2, startup_grace: 2s }
+  - name: frontend
+    command: './bin/fakesvc --name frontend --listen 127.0.0.1:15173 --connect 127.0.0.1:18080 --connect-every 200ms --style node'
+    depends_on: [api]
+    health: { type: http, url: "http://127.0.0.1:15173/health", interval: 100ms, timeout: 100ms, retries: 2, startup_grace: 1s }

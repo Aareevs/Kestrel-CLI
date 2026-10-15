@@ -1,5 +1,78 @@
 # Progress
 
+## Phase 7: Hardening and release tooling (2026-10-15). Not released.
+
+**No release has been made.** You asked for none yet. Nothing was tagged, no GitHub release or draft was
+created, no tap repository was created, and nothing was published. The release tooling is built and tested
+locally only.
+
+### Built
+
+- **Scenarios F, G, H, J** (`tests/integration/hardening_test.go`): one end-to-end test each, covering every
+  guarantee the spec states for that scenario (details in [testing.md](testing.md#scenario-tests)).
+- **GoReleaser** (`.goreleaser.yaml`, v2.18.2 pinned):
+  - five static binaries, tar.gz/zip archives, and SHA-256 checksums;
+  - a Homebrew cask for `Aareevs/homebrew-tap`;
+  - **draft** GitHub releases only.
+  - `make release-check` / `make release-snapshot` run it via `go run`. CI validates the config.
+- **Release workflow** (`.github/workflows/release.yml`): runs only on a pushed `v*` tag (none exists). It runs
+  the race tests, then GoReleaser, which produces a draft.
+- **Install script** (`scripts/install.sh`, POSIX sh): detects platform, downloads, verifies SHA-256 (installs
+  nothing on a mismatch), installs to `~/.local/bin`, never uses sudo, never edits profiles.
+- **Docs and README:** [docs/releasing.md](releasing.md) covers the dry run, the one-time setup before the first
+  release, and cutting a release. The README now has install paths labeled "today" and "from the first release",
+  plus Platform Support and Troubleshooting. `docs/assets/demo.tape` (VHS) and a demo stack are included; no GIF
+  is committed because VHS isn't installed here, and the spec forbids a fake one.
+
+### Exit criteria
+
+> `goreleaser release --snapshot --clean` succeeds; all quality checks green; README reflects only real behavior.
+
+- **Snapshot:** `goreleaser release --snapshot --clean` succeeded. It built the 5 binaries, 5 archives,
+  `checksums.txt`, and the cask in `dist/`. Checked: the archive holds `kestrel`, `LICENSE`, and `README.md`; the
+  Linux binary is static; `kestrel version` reports the snapshot version; the cask's checksums match. The
+  installer, run against those artifacts, installed and ran the binary, and refused a tampered archive.
+- **Quality checks:** all green (table below).
+- **README:** every command and output shown exists and works. The two things that don't work yet (the one-line
+  installer and Homebrew) are labeled "from the first release".
+
+Stability: the full integration suite passed 9 of 9 runs, 3 of them under 8 CPU hogs.
+
+### Bug found while building this (fixed in this PR)
+
+- **Terminal escape sequences in a command line reached the terminal and storage** (Phase 2). Output lines were
+  always cleaned, but supervisor messages, such as `started (pid N): <command>`, were only redacted. A command
+  containing escape sequences could therefore drive the terminal, and was stored with them. `Collector.Emit` now
+  cleans every non-line event the same way. Found by Scenario J; there's also a unit test.
+
+### Quality checks (darwin/arm64, go1.26.2)
+
+| Check | Result |
+|---|---|
+| `gofmt -l .` | no output |
+| `go vet ./...` | pass, plus `GOOS=windows go vet ./internal/...` |
+| `go test ./...` | pass (16 packages) |
+| `go test -race ./...` | pass |
+| builds: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64 | pass |
+| `staticcheck@2025.1.1` | pass |
+| `goreleaser check` / `release --snapshot --clean` (v2.18.2) | pass |
+| Coverage (`-short`, `-coverpkg=./internal/...,./pkg/...`) | 86.5% overall |
+
+### Before a first release (your to-do list; also in releasing.md)
+
+1. Create `github.com/Aareevs/homebrew-tap`, and add a `HOMEBREW_TAP_TOKEN` secret that can push to it.
+2. Optionally record the demo: `vhs docs/assets/demo.tape`, then commit the GIF and reference it in the README.
+3. Tag `vX.Y.Z` and push the tag, review the draft release, then publish it.
+
+### Known gaps and limitations
+
+- **Unsigned binaries:** they aren't signed or notarized for macOS. The cask removes the quarantine attribute.
+- **Local snapshot Go version:** local snapshots are built with the toolchain GoReleaser runs under (go1.27.2,
+  fetched into the module cache automatically). The release workflow uses the Go version in `go.mod`.
+- **Windows remains untested,** as in every phase.
+- **The installer can't be tested end to end against GitHub** until a release is published. It is tested against
+  a local release directory.
+
 ## Phase 6: MCP server (2026-10-15)
 
 ### Built

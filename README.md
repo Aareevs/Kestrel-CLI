@@ -39,30 +39,42 @@ hypotheses backed by the exact events that support them, and verifies whether yo
 needs no config to start, never uploads anything, and never runs a command you didn't ask for.
 
 > [!NOTE]
-> **Kestrel is in early development.** Discovery, supervision, session recording, incident timelines,
-> evidence-backed diagnosis, fix verification, and the read-only MCP server work today. Release packaging
-> (Homebrew, install script, prebuilt binaries) ships next. Anything not yet built is marked **planned** below. Every output in this README comes from a real run.
+> **Kestrel is pre-release.** Everything described here works and is tested. No release has been published yet,
+> so for now install with `go install` or from source. The one-line installer and Homebrew start working with the
+> first release. Every output in this README comes from a real run.
 
 ---
 
 ## Quick Install
 
-### 1. Go Install (any platform with Go 1.26+)
+### Today: Go install (any platform with Go 1.26+)
 ```bash
 go install github.com/Aareevs/Kestrel-CLI/cmd/kestrel@latest
 ```
 
-### 2. From Source
+### Today: from source
 ```bash
 git clone https://github.com/Aareevs/Kestrel-CLI
 cd Kestrel-CLI
 make build        # → ./bin/kestrel
 ```
 
-### Coming with the first release
-Homebrew tap, a `curl … | sh` installer with SHA-256 verification, and prebuilt binaries for macOS (Apple
-Silicon and Intel), Linux (x86_64 and ARM64), and Windows (x64) on the
-[Releases page](https://github.com/Aareevs/Kestrel-CLI/releases).
+### From the first release: one-line install (macOS, Linux)
+```bash
+curl -fsSL https://raw.githubusercontent.com/Aareevs/Kestrel-CLI/main/scripts/install.sh | sh
+```
+Downloads the archive for your platform, **verifies its SHA-256 checksum** (and installs nothing if it doesn't
+match), and puts `kestrel` in `~/.local/bin`. No `sudo`, no shell-profile edits. Pin a version with
+`KESTREL_VERSION=v0.1.0`, or choose a directory with `KESTREL_INSTALL_DIR`.
+
+### From the first release: Homebrew
+```bash
+brew install aareevs/tap/kestrel
+```
+
+Prebuilt archives for macOS (Apple Silicon, Intel), Linux (x86_64, ARM64), and Windows (x64) will be on the
+[Releases page](https://github.com/Aareevs/Kestrel-CLI/releases). The release tooling is built and tested
+locally ([docs/releasing.md](docs/releasing.md)).
 
 ---
 
@@ -539,6 +551,35 @@ Threat model and limits: [docs/security.md](docs/security.md).
 
 ---
 
+## Platform Support
+
+| | macOS | Linux | Windows |
+| :--- | :---: | :---: | :---: |
+| Discovery, diagnosis, timelines, sessions, MCP | ✅ tested (CI) | ✅ tested (CI) | builds; untested |
+| Supervision (process groups, clean Ctrl-C) | ✅ tested | ✅ tested | Job Objects; untested |
+| Services survive `kill -9` of Kestrel? | can (no parent-death signal on macOS) | no (`Pdeathsig`) | no (job closes) |
+| `verify` command checks | ✅ tested | ✅ tested | `cmd.exe /C`; untested |
+| Install script / Homebrew | from the first release | from the first release | download the `.zip` |
+
+Binaries are static (pure-Go SQLite, no cgo). They are not notarized for macOS; see
+[docs/releasing.md](docs/releasing.md#notes).
+
+---
+
+## Troubleshooting
+
+| Symptom | What to do |
+| :--- | :--- |
+| `no kestrel.yaml found` from `watch` | Run `kestrel init` to generate one from discovery, or use `kestrel run -- <command>`, which needs no config. |
+| `session storage unavailable` | Run `kestrel doctor`. Check permissions on the data directory, or point `KESTREL_HOME` somewhere writable. Supervision keeps working without storage. |
+| `diagnose` says **unresolved** (exit 3) | Several services failed with nothing linking them. Add `depends_on` to `kestrel.yaml` if one really depends on another, and follow the suggested next check. |
+| `verify` says **inconclusive** | Nothing could be checked. Give the service a `health` probe, or run `verify` while `kestrel watch` is still running. |
+| Your test command didn't run during `verify` | Commands need `--allow-exec`, or a `y` at the prompt in a terminal. |
+| An MCP client sees no sessions | Start the server with `--project <dir>` pointing at the project you ran `watch`/`run` in, with the same `KESTREL_HOME`. |
+| A port is "already in use" | `kestrel diagnose` names the port and suggests `lsof -nP -iTCP:<port> -sTCP:LISTEN`. Kestrel never touches the process holding it. |
+
+---
+
 ## Documentation
 
 - **[Architecture](docs/architecture.md)**: package map, discovery and supervision pipelines, design rules.
@@ -546,6 +587,7 @@ Threat model and limits: [docs/security.md](docs/security.md).
 - **[Diagnosis Rules](docs/diagnosis-rules.md)**: how incidents form, how hypotheses are ranked, every rule.
 - **[Verification](docs/verification.md)**: checks, the stability window, before/after, verdicts, exec policy.
 - **[MCP Server](docs/mcp.md)**: setup for Claude Code and other clients, every tool, redaction, limits.
+- **[Releasing](docs/releasing.md)**: GoReleaser, the Homebrew tap, the install script.
 - **[Configuration Reference](docs/configuration.md)**: every field, default, and validation rule.
 - **[Security Model](docs/security.md)**: threat model, masking/redaction limits, exec policy.
 - **[Testing Guide](docs/testing.md)**: golden files, fixtures, adding a detector.
@@ -559,6 +601,7 @@ Threat model and limits: [docs/security.md](docs/security.md).
 make check    # gofmt, vet, tests, race detector, build, cross-compiles (what CI runs)
 make lint     # staticcheck
 make golden   # regenerate golden files after an intentional output change, then review the diff
+make release-snapshot   # build every release artifact into dist/ (publishes nothing)
 ```
 
 ### Manual Smoke Test

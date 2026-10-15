@@ -116,9 +116,19 @@ The exec policy is tested from both sides: with no terminal and no flag, a comma
 doesn't run (the test was checked against a deliberately broken authorizer, and it catches it); with `--allow-exec`,
 or a `y` at the prompt, it does.
 
-Scenarios still to come: F–H and J in hardening (Phase 7). Phases 2–3 already cover parts of F
-(redaction in terminal and JSON output, the database, WAL, segments, and export), G (interrupt, no orphans,
-storage flushed), H (bounded memory, overload events, retention) and J (hostile lines are inert).
+**Scenarios F, G, H and J** are in `hardening_test.go`. Each one checks every guarantee the spec states for it,
+end to end:
+
+| Scenario | What the test proves |
+|---|---|
+| F secrets | No fake secret in: the text terminal, the JSON stream, every stored byte (SQLite, WAL, decompressed segments), `sessions show/export`, `diagnose`, `timeline`, `verify` (text and JSON), or any MCP tool. Placeholders are present in each, so the secrets did reach every one. |
+| G interrupt | Ctrl-C exits 0. Every PID (children included, checked live first) is gone, and each service's stop is recorded. The session is closed with no write errors, **every event that was streamed is in storage**, and every segment is sealed. |
+| H log flood | 50 MB/min with a slow reader: RSS stays under 100 MiB, `collector_overload` is emitted, and with `max_total_mb: 2` retention removes both older sessions while keeping the one being closed. |
+| J hostile content | Canary lines (`$(touch …)`, backticks, `; touch …`) never create their files, through recording, `diagnose`, `timeline`, `verify --allow-exec`, or MCP. The diagnosis and exit code are identical to the same run without hostile lines. The lines are stored verbatim as data, with secrets redacted and terminal escapes stripped everywhere. |
+
+`TestInstallScript` builds a release directory the way GoReleaser lays it out and runs `scripts/install.sh`
+against it via `file://`. It checks the happy path, that a tampered archive is refused (and nothing installed),
+and that a missing version fails cleanly.
 
 ## MCP tests
 
