@@ -192,6 +192,29 @@ func (a *App) SessionExport(ctx context.Context, ref string, all bool, w io.Writ
 	return id, st.Export(ctx, id, red.Redact, w)
 }
 
+// SessionsResolve looks up the sessions that references name, without
+// changing anything, so a confirmation prompt can show what will go.
+func (a *App) SessionsResolve(ctx context.Context, refs []string, all bool) ([]api.SessionSummary, error) {
+	st, err := a.openStoreRecovered(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s", storageHint(err))
+	}
+	defer st.Close()
+	var out []api.SessionSummary
+	for _, ref := range refs {
+		id, err := a.resolve(ctx, st, ref, all)
+		if err != nil {
+			return nil, err
+		}
+		sum, _, err := st.GetSession(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sum)
+	}
+	return out, nil
+}
+
 // SessionsDelete removes sessions by reference. Active sessions are refused.
 func (a *App) SessionsDelete(ctx context.Context, refs []string, all bool) ([]api.RemovedSession, error) {
 	st, err := a.openStoreRecovered(ctx)

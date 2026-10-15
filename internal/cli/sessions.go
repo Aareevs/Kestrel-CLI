@@ -141,7 +141,16 @@ func newSessionsCmd(g *globals) *cobra.Command {
 				if !g.streams.InIsTTY {
 					return usageErr(errors.New("not deleting without confirmation; re-run with --yes"))
 				}
-				fmt.Fprintf(g.streams.Out, "Delete %d session(s): %s? This cannot be undone. [y/N] ", len(args), strings.Join(args, ", "))
+				// Resolve first so "last" and prefixes are shown as the real sessions.
+				targets, err := a.SessionsResolve(cmd.Context(), args, all)
+				if err != nil {
+					return appErr(err)
+				}
+				fmt.Fprintf(g.streams.Out, "About to delete %d session(s):\n", len(targets))
+				for _, t := range targets {
+					fmt.Fprintf(g.streams.Out, "  %s  %s  %s, %d events, %s\n", t.ID, t.Mode, t.Status, t.Events, output.HumanBytes(t.SizeBytes))
+				}
+				fmt.Fprint(g.streams.Out, "This cannot be undone. Delete? [y/N] ")
 				line, _ := bufio.NewReader(g.streams.In).ReadString('\n')
 				if ans := strings.ToLower(strings.TrimSpace(line)); ans != "y" && ans != "yes" {
 					fmt.Fprintln(g.streams.Out, "Nothing deleted.")

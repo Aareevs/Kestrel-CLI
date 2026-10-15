@@ -226,6 +226,15 @@ func TestResolveReferences(t *testing.T) {
 	if _, err := s.Resolve(ctx, "last", "/nowhere"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("last in empty project: %v", err)
 	}
+	// Full IDs and prefixes are scoped to the project too; "" widens to all.
+	for _, ref := range []string{a, a[:12]} {
+		if _, err := s.Resolve(ctx, ref, "/other"); !errors.Is(err, ErrNotFound) {
+			t.Errorf("Resolve(%q) from another project: %v", ref, err)
+		}
+	}
+	if got, err := s.Resolve(ctx, a, ""); err != nil || got != a {
+		t.Errorf("Resolve with all projects: %q %v", got, err)
+	}
 }
 
 func segmentFiles(t *testing.T, dir, id string) []string {

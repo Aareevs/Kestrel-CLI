@@ -114,8 +114,8 @@ func (s *Store) ListSessions(ctx context.Context, f Filter) ([]api.SessionSummar
 }
 
 // Resolve turns a reference into a session ID. ref may be a full ID, a unique
-// prefix (case-insensitive), or "last"/"latest" (newest session for the
-// project, or overall when projectRoot is empty).
+// prefix (case-insensitive), or "last"/"latest". All forms are limited to
+// projectRoot's sessions, or span every project when projectRoot is empty.
 func (s *Store) Resolve(ctx context.Context, ref, projectRoot string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" || strings.EqualFold(ref, "last") || strings.EqualFold(ref, "latest") {
@@ -131,7 +131,13 @@ func (s *Store) Resolve(ctx context.Context, ref, projectRoot string) (string, e
 	if strings.ContainsAny(ref, "%_\\") {
 		return "", fmt.Errorf("%w: %q", ErrNotFound, ref)
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sessions WHERE id LIKE ? ESCAPE '\' ORDER BY id LIMIT 6`, strings.ToUpper(ref)+"%")
+	q := `SELECT id FROM sessions WHERE id LIKE ? ESCAPE '\'`
+	args := []any{strings.ToUpper(ref) + "%"}
+	if projectRoot != "" { // IDs and prefixes are scoped like "last": --all widens them
+		q += ` AND project_root = ?`
+		args = append(args, projectRoot)
+	}
+	rows, err := s.db.QueryContext(ctx, q+` ORDER BY id LIMIT 6`, args...)
 	if err != nil {
 		return "", err
 	}
