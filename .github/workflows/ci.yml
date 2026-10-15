@@ -24,6 +24,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: gofmt
+        if: matrix.os == 'ubuntu-latest'
         run: |
           out="$(gofmt -l .)"
           if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
