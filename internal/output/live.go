@@ -101,7 +101,12 @@ func (l *Live) Emit(ev api.Event) {
 			bar = s.Yellow("│ ")
 		}
 		if ev.Attrs.Repeats > 0 {
-			line = bar + s.Dim(fmt.Sprintf("↻ previous line repeated ×%d over %s", ev.Attrs.Repeats, (time.Duration(ev.Attrs.DurationMS)*time.Millisecond).Round(100*time.Millisecond)))
+			// Streams fold separately, so name the line rather than say "previous".
+			msg := ev.Message
+			if r := []rune(msg); len(r) > 60 {
+				msg = string(r[:59]) + "…"
+			}
+			line = bar + s.Dim(fmt.Sprintf("↻ ×%d more over %s: %s", ev.Attrs.Repeats, (time.Duration(ev.Attrs.DurationMS)*time.Millisecond).Round(100*time.Millisecond), msg))
 		} else {
 			line = bar + ev.Message + annotation(s, ev)
 		}

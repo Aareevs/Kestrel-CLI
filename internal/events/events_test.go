@@ -1,6 +1,7 @@
 package events
 
 import (
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -164,5 +165,18 @@ func TestFingerprint(t *testing.T) {
 	}
 	if Fingerprint("connection refused") == Fingerprint("connection reset") {
 		t.Error("different messages must not share a fingerprint")
+	}
+}
+
+// TestPatternsDocumented keeps docs/events.md in sync with the library.
+func TestPatternsDocumented(t *testing.T) {
+	doc, err := os.ReadFile("../../docs/events.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range Patterns {
+		if !strings.Contains(string(doc), "`"+p.ID+"`") {
+			t.Errorf("docs/events.md does not document %s", p.ID)
+		}
 	}
 }

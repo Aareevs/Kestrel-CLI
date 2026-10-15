@@ -39,9 +39,9 @@ hypotheses backed by the exact events that support them, and verifies whether yo
 needs no config to start, never uploads anything, and never runs a command you didn't ask for.
 
 > [!NOTE]
-> **Kestrel is in early development.** Project discovery (`inspect`, `init`) and config tooling work today.
-> Supervision, timelines, diagnosis, verification, and the MCP server ship in phases. Anything not yet built is
-> marked **planned** below. Every output in this README comes from a real run.
+> **Kestrel is in early development.** Discovery (`inspect`, `init`), config tooling, and supervision (`run`,
+> `watch`, `status`) work today. Timelines, diagnosis, verification, session history, and the MCP server ship in
+> phases. Anything not yet built is marked **planned** below. Every output in this README comes from a real run.
 
 ---
 
@@ -74,11 +74,11 @@ cd your-project
 # 1. Inspect: what's here, how it probably runs, and how sure Kestrel is
 kestrel inspect
 
-# 2. Init: turn that into a kestrel.yaml (asks before writing, never overwrites)
-kestrel init
+# 2. Run anything, no config: output captured, classified, redacted; announced ports probed
+kestrel run -- npm run dev
 
-# 3. Check: validate the config and Kestrel's own setup
-kestrel config validate && kestrel doctor
+# 3. Or supervise the whole stack from a kestrel.yaml (kestrel init writes one for you)
+kestrel init && kestrel watch
 ```
 
 ### Commands
@@ -90,8 +90,9 @@ kestrel config validate && kestrel doctor
 | `kestrel config show` / `validate` / `path` | Effective config with secrets masked, strict validation, location | ✅ |
 | `kestrel doctor` | Self-check: platform, data directory, config, tools | ✅ |
 | `kestrel version` | Version and build info | ✅ |
-| `kestrel run -- <cmd>` | Wrap any command and record a session, no config needed | planned |
-| `kestrel watch` / `status` | Supervise services; liveness vs. readiness | planned |
+| `kestrel run -- <cmd>` | Wrap any command (or several with `--svc name="cmd"`), no config needed | ✅ |
+| `kestrel watch [svc...]` | Supervise configured services in dependency order with live, classified output | ✅ |
+| `kestrel status` | Liveness vs. readiness per service, for a live session or straight from `kestrel.yaml` | ✅ |
 | `kestrel timeline` | Incident timeline: last healthy state → first anomaly → downstream symptoms | planned |
 | `kestrel diagnose` | Ranked, evidence-backed hypotheses with a concrete next step | planned |
 | `kestrel verify` | Post-fix checks over a stability window | planned |
@@ -99,7 +100,8 @@ kestrel config validate && kestrel doctor
 | `kestrel mcp` | Read-only MCP server for AI agents | planned |
 
 **Global flags** (on every command):
-- `--format json`: stable, versioned JSON on every read command (schema in [`pkg/api`](pkg/api/api.go)).
+- `--format json`: stable, versioned JSON on every read command (schema in [`pkg/api`](pkg/api/)); `run` and
+  `watch` stream [events](docs/events.md) as NDJSON.
 - `--project <dir>`: project root (default: nearest ancestor with `kestrel.yaml`, else the current directory).
 - `-v` / `--verbose`: diagnostic logging to stderr. `-q` / `--quiet`: essential output only.
 - `--no-color`: plain output (`NO_COLOR` and non-TTY output are detected automatically).
@@ -110,6 +112,49 @@ kestrel config validate && kestrel doctor
 ---
 
 ## What It Looks Like
+
+### Supervision
+
+`kestrel watch` on a two-service config whose database crashes two seconds in. The services are
+[`fakesvc`](tests/fakesvc), the scripted stand-in Kestrel's tests use, so this is reproducible. Real output,
+including the redaction:
+
+```text
+kestrel session 01M4ZDNFN5XYA55F5C1HG58ZTT · db, api · Ctrl-C to stop
+14:48:05 db      ▶ started (pid 87897): ./fakesvc --name db --listen 127.0.0.1:15432 --exit-after 2s --exit-code 1 --exit-message "FATAL:  could not open file global/pg_control: Permission denied"
+14:48:05 db      │ db starting (pid 87897)
+14:48:05 db      │ db listening on 127.0.0.1:15432
+14:48:05 db      ✓ ready: tcp localhost:15432 (connected in 1ms)
+14:48:05 api     ▶ started (pid 87900): ./fakesvc --name api --listen 127.0.0.1:18080 --connect 127.0.0.1:15432 --connect-every 250ms --secrets
+14:48:05 api     │ api starting (pid 87900)
+14:48:05 api     │ using api_key=[REDACTED:stripe-key] for billing
+14:48:05 api     │ connecting with DATABASE_URL=postgres://app:[REDACTED:url-credentials]@localhost:5432/app
+14:48:05 api     │ Authorization: [REDACTED:header]
+14:48:05 api     │ aws key [REDACTED:aws-access-key] loaded
+14:48:05 api     │ api listening on 127.0.0.1:18080
+14:48:05 api     │ connected to 127.0.0.1:15432
+14:48:05 api     ✓ ready: http http://localhost:18080/health (status 200 in 2ms)
+14:48:07 db      │ FATAL:  could not open file global/pg_control: Permission denied
+14:48:07 db      ✗ crashed (exit code 1)
+14:48:07 api     │ dial tcp 127.0.0.1:15432: connect: connection refused  ‹dependency_conn_failed 127.0.0.1:15432 P006-connection-refused›
+14:48:07 db      ✗ not ready: tcp localhost:15432 failed 2 times (dial [::1]:15432: connect: connection refused)
+kestrel: stopping services (press Ctrl-C again to force quit)…
+14:48:09 api     │ api received terminated, shutting down
+14:48:09 api     │ ↻ ×9 more over 2.3s: dial tcp 127.0.0.1:15432: connect: connection refused
+14:48:09 api     ■ stopped by Kestrel (exit code 0)
+
+kestrel session 01M4ZDNFN5XYA55F5C1HG58ZTT ended
+  SERVICE  LIVENESS     READINESS  DETAIL
+  db       crashed      not_ready  tcp localhost:15432 · exit code 1
+  api      exited       unknown    http http://localhost:18080/health · stopped by Kestrel
+```
+
+`api` started only after `db` answered its probe. The connection refusals are tagged with the pattern that
+recognized them, and the retry loop is folded into one line. Secrets never reach the screen. Ctrl-C stopped
+every process Kestrel started, including children, and nothing else. *Planned:* `kestrel diagnose` turning this
+trail into "db failed first; api's errors are a downstream symptom", with event IDs as evidence.
+
+### Discovery
 
 `kestrel inspect` on [a compose project](tests/fixtures/projects/compose-stack) with Postgres, Redis, a Go API,
 and a Next.js frontend. This is real output, taken from the golden test:
@@ -155,8 +200,6 @@ Every claim points to the file and line it came from. `api` and `web` appear onc
 both in compose and as their own Go/Node projects. When a dependency is only *inferred* (say, `pgx` in `go.mod`
 implies Postgres) and two Postgres services exist, Kestrel says it can't tell rather than guessing.
 
-*Planned:* the database → API → frontend failure walkthrough with `kestrel diagnose`, once diagnosis ships.
-
 ---
 
 ## AI Agent Companion (`kestrel mcp`)
@@ -181,6 +224,9 @@ Setup will look like `claude mcp add kestrel -- kestrel mcp`. It won't work unti
 | **Zero configuration to start** | ✓ | ✓ | — (needs compose) | ✓ |
 | **Every finding cites file:line or event ID** | ✓ | — | — | — |
 | **Separates observed facts from guesses** | ✓ | — | — | — |
+| **Secrets redacted before anything is shown** | ✓ | — | — | — |
+| **Ctrl-C stops the whole process tree, nothing else** | ✓ | — (orphans) | ✓ (containers) | — |
+| **Bounded memory under log floods, drops reported** | ✓ | n/a | n/a | — (context overflow) |
 | **Works offline, nothing uploaded** | ✓ | ✓ | ✓ | — |
 | **Never executes anything it finds** | ✓ | ✓ | ✓ | — |
 | **Ordered incident timeline across services** | planned | — | Partial (interleaved) | — |
@@ -220,12 +266,19 @@ especially, fall back to framework defaults.
 
 ```text
  discover ──▶ collect ──▶ normalize ──▶ correlate ──▶ diagnose ──▶ verify
- (available)  (planned: process output, probes, typed events, redaction, incidents,
-              dependency graph, ranked evidence-backed hypotheses, stability window)
+ ✅ files      ✅ output,    ✅ typed,       planned       planned      planned
+               probes,       redacted,       (incidents,   (ranked,     (stability
+               lifecycle     classified      dep graph)    evidence)    window)
 ```
 
-Discovery reads, never runs, your project files to work out what the services are and how they connect.
-Everything after it builds on that. See the [architecture doc](docs/architecture.md).
+- **Discover** reads, never runs, your project files to work out what the services are.
+- **Collect** supervises processes in their own process groups, reads stdout/stderr through a bounded
+  buffer, and probes readiness (HTTP, TCP, process).
+- **Normalize** turns every line into a typed [event](docs/events.md): redacted, severity-tagged, matched
+  against a pattern library (port conflicts, refused connections, database errors, panics, tracebacks, OOMs,
+  test failures), with repeats folded.
+
+See the [architecture doc](docs/architecture.md).
 
 ---
 
@@ -255,8 +308,11 @@ Full reference: [docs/configuration.md](docs/configuration.md).
 ## Privacy & Storage
 
 - **Local only.** No network calls, no uploads, no telemetry.
-- **Secrets stay out.** `.env` is never read. Only variable *names* come from `.env.example`.
-  `config show` masks literal secrets and URL passwords.
+- **Secrets stay out.** `.env` is never read. Only variable *names* come from `.env.example`. Every line of
+  process output is [redacted](docs/security.md) (keys, tokens, JWTs, URL credentials, auth headers, secret
+  `key=value` pairs) before it's printed. `config show` masks literal secrets.
+- **Nothing you didn't ask for.** Kestrel only signals processes it started. Log text is data: it's never
+  executed, and terminal escape sequences are stripped.
 - **Out of your repo.** Kestrel's data lives in `~/Library/Application Support/Kestrel` (macOS),
   `$XDG_DATA_HOME/kestrel` (Linux), or `%LOCALAPPDATA%\Kestrel` (Windows). Override with `KESTREL_HOME`.
 
@@ -266,7 +322,8 @@ Threat model and limits: [docs/security.md](docs/security.md).
 
 ## Documentation
 
-- **[Architecture](docs/architecture.md)**: package map, discovery pipeline, design rules, dependency choices.
+- **[Architecture](docs/architecture.md)**: package map, discovery and supervision pipelines, design rules.
+- **[Events](docs/events.md)**: event schema, types, severity, backpressure, and the pattern library.
 - **[Configuration Reference](docs/configuration.md)**: every field, default, and validation rule.
 - **[Security Model](docs/security.md)**: threat model, masking/redaction limits, exec policy.
 - **[Testing Guide](docs/testing.md)**: golden files, fixtures, adding a detector.
@@ -293,6 +350,12 @@ make golden   # regenerate golden files after an intentional output change, then
 - [ ] **Validation:** add a typo like `helth:` to the generated `kestrel.yaml`, then run `kestrel config validate`.
   *Verify:* it points at the line and exits `2`.
 - [ ] **Doctor:** `./bin/kestrel doctor`. *Verify:* all checks pass or explain themselves.
+- [ ] **Zero-config run:** `go build -o /tmp/fakesvc ./tests/fakesvc && ./bin/kestrel run -- /tmp/fakesvc --listen 127.0.0.1:18080 --secrets`.
+  *Verify:* the port is auto-probed (`✓ ready`), secrets show as `[REDACTED:…]`, and Ctrl-C prints the summary.
+- [ ] **No orphans:** run `kestrel watch` on a config whose services spawn children, press Ctrl-C, then
+  `ps -ef | grep fakesvc`. *Verify:* nothing left.
+- [ ] **Status:** while `watch` runs, run `kestrel status` in a second terminal. *Verify:* it shows liveness and
+  readiness live.
 
 ---
 

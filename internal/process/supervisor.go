@@ -439,18 +439,20 @@ func (s *Supervisor) Status() []api.ServiceStatus {
 			st.ExitCode = &code
 			st.Detail = svc.exit.String()
 		}
-		m := svc.monitor
+		m, exit := svc.monitor, svc.exit
 		svc.mu.Unlock()
 		if m != nil {
 			r, res, _ := m.State()
 			st.Readiness, st.Probe = r, m.Prober.String()
-			if res.Detail != "" && svc.exit == nil {
+			if res.Detail != "" && exit == nil {
 				st.Detail = res.Detail
 			}
 		}
-		// A probe result from before the process died says nothing about now.
-		if svc.spec.Run != nil && (st.Liveness == api.LivenessCrashed || st.Liveness == api.LivenessExited) {
-			if st.Readiness != api.ReadinessUnknown {
+		// A probe result from before the process ended says nothing about now.
+		if svc.spec.Run != nil && exit != nil && st.Readiness != api.ReadinessUnknown {
+			if exit.Requested {
+				st.Readiness, st.Detail = api.ReadinessUnknown, "stopped by Kestrel"
+			} else {
 				st.Readiness = api.ReadinessNotReady
 			}
 		}

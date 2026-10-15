@@ -11,15 +11,21 @@ internal/config/        kestrel.yaml schema, strict decoding, validation with li
                         defaults, ${ENV} references, masking for display
 internal/discovery/     bounded, read-only project scan → service candidates
 internal/output/        TTY/NO_COLOR detection, ANSI styles, text renderers, JSON writer
+internal/events/        event identity (ULID, seq, fingerprint), level detection, pattern library
+internal/privacy/       redaction applied before anything is printed (later: stored, exported)
+internal/collectors/    line framing, repeat folding, bounded buffer with backpressure
+internal/health/        http/tcp/process probes, readiness state machine
+internal/process/       process groups / Job Objects, graceful-then-forced stop, supervisor
 internal/appdir/        per-OS data directory (KESTREL_HOME override)
 internal/buildinfo/     version metadata (ldflags, falls back to embedded VCS info)
 pkg/api/                stable JSON types for every --format json output
+tests/fakesvc/          scripted fake service used by supervision and scenario tests
 tests/fixtures/projects sample projects scanned by golden tests
 tests/integration/      in-process CLI tests and golden files
 ```
 
-Packages listed in the build spec but not here (process, collectors, health, events, graph, correlation,
-diagnosis, verification, storage, privacy, mcp) are created in the phase that first has code for them.
+Packages listed in the build spec but not here yet (graph, correlation, diagnosis, verification, storage, mcp)
+are created in the phase that first has code for them.
 
 ## Rules
 
@@ -64,6 +70,35 @@ A post-pass then reconciles the results:
   The candidate's overall confidence is `high` when the command is high and the port is at least medium,
   `medium` when the command is at least medium, and `low` otherwise.
 
+## Supervision and collection
+
+```text
+ child stdout ─┐                                         ┌─▶ live renderer (text / NDJSON)
+ child stderr ─┤─ ReadLines ─ redact ─ classify ─ fold ─▶ Buffer ─▶ Collector.Run ─┤
+ probes ───────┤        (per stream)                  (bounded,   (single,         └─▶ supervisor sink
+ supervisor ───┘                                     seq at push)  in order)            (auto-probe)
+```
+
+- **Process groups.** Every process starts in a new group (Unix `Setpgid`) or Job Object (Windows). Stop sends
+  SIGTERM (CTRL_BREAK) to the group, waits up to the grace period for the *group* to empty, then sends SIGKILL
+  (TerminateJobObject). Kestrel only signals groups it created: POSIX doesn't reuse a PID while a group with
+  that ID exists. Process exit is tracked separately from pipe EOF, so a grandchild that holds the pipes can't
+  hide the main process's exit.
+- **Lines.** `ReadLines` uses `bufio.Reader.ReadSlice`. Lines longer than 16 KiB are cut with a
+  `…[truncated N bytes]` marker. ANSI escapes and other control characters are removed, `` redraws keep only
+  their final state, and invalid UTF-8 is replaced.
+- **Order.** Producers run concurrently, so `seq` is assigned inside the buffer lock when an event is
+  inserted. Delivery order is therefore always `seq` order. Collector overload is reported as a marker event
+  that takes its place in that order. See [events.md](events.md#backpressure).
+- **Supervisor.** Starts services in dependency (topological) order. Before starting a service, it waits for
+  each dependency's probe, bounded by that dependency's startup grace plus retries and capped at 60s, then
+  starts it anyway with a warning, so downstream symptoms of an upstream failure are still observed. Services
+  without a `command` are probed only. Shutdown stops probes, stops all groups in parallel, then drains the
+  readers.
+- **Live status.** A running session keeps a small JSON file at `<data dir>/run/<hash of project root>.json`
+  (names, PIDs, liveness, readiness; never commands, environment, or output), rewritten at most every 250ms.
+  `kestrel status` in another terminal reads it. SQLite session storage replaces it in Phase 3.
+
 ## Config
 
 `config.Parse` decodes the file twice. The `yaml.Node` tree supplies line numbers. A `yaml.Decoder` with
@@ -81,10 +116,18 @@ kept in sync with the structs by `TestJSONSchemaInSync`.
 | `gopkg.in/yaml.v3` | Spec-mandated YAML parser. Gives node line numbers and strict known-field decoding. Also parses compose files. |
 | `github.com/spf13/pflag`, `github.com/inconshreveable/mousetrap` | Indirect, via cobra. |
 
+No new modules in Phase 2. Windows Job Objects are called through `syscall.NewLazyDLL` rather than adding
+`golang.org/x/sys`.
+
 Dev-only, not in `go.mod`: staticcheck, run with `go run honnef.co/go/tools/cmd/staticcheck@2025.1.1`.
 
 ## Deviations from the spec
 
 - The `--session` global flag isn't registered until sessions exist (Phase 3), so no flag silently does nothing.
+- Event source type is named `api.EventSource` because `api.Source` already names discovery sources.
+- One event type was added to the spec's initial set: `probe_ready` (first passing probe), which timelines need
+  to anchor "last known healthy".
+- The supervisor lives in `internal/process`, as the spec's package map suggests, next to the
+  process-group code it drives.
 - `config show --format json` emits the config document itself (`internal/config` types with JSON tags). Its
   schema is `docs/kestrel.schema.json`, not a `pkg/api` type.
