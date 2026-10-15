@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./...
+      - name: race
+        run: go test -race ./...
+      - name: build
+        run: go build ./cmd/kestrel
+      - name: cross-compile
+        run: |
+          GOOS=linux   GOARCH=amd64 go build -o /dev/null ./cmd/kestrel
+          GOOS=linux   GOARCH=arm64 go build -o /dev/null ./cmd/kestrel
+          GOOS=darwin  GOARCH=arm64 go build -o /dev/null ./cmd/kestrel
+          GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/kestrel
+      - name: staticcheck
+        if: matrix.os == 'ubuntu-latest'
+        run: go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...

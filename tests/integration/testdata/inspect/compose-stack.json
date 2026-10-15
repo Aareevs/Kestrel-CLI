@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "docker",
+    "docker-compose",
+    "go",
+    "node",
+    "postgres",
+    "redis"
+  ],
+  "candidates": [
+    {
+      "name": "cache",
+      "dir": ".",
+      "technology": "redis",
+      "image": "redis:7-alpine",
+      "command": {
+        "value": "docker compose up cache",
+        "confidence": "high",
+        "source": {
+          "file": "compose.yaml",
+          "line": 8,
+          "note": "compose service"
+        }
+      },
+      "port": {
+        "value": 6379,
+        "confidence": "high",
+        "source": {
+          "file": "compose.yaml",
+          "line": 11,
+          "note": "published port"
+        }
+      },
+      "health": {
+        "type": "tcp",
+        "target": "localhost:6379",
+        "confidence": "high",
+        "reason": "TCP connect to the redis port"
+      },
+      "sources": [
+        {
+          "file": "compose.yaml",
+          "line": 8
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "name": "db",
+      "dir": ".",
+      "technology": "postgres",
+      "image": "postgres:16-alpine",
+      "command": {
+        "value": "docker compose up db",
+        "confidence": "high",
+        "source": {
+          "file": "compose.yaml",
+          "line": 2,
+          "note": "compose service"
+        }
+      },
+      "port": {
+        "value": 5432,
+        "confidence": "high",
+        "source": {
+          "file": "compose.yaml",
+          "line": 5,
+          "note": "published port"
+        }
+      },
+      "health": {
+        "type": "tcp",
+        "target": "localhost:5432",
+        "confidence": "high",
+        "reason": "TCP connect to the postgres port"
+      },
+      "env_keys": [
+        "POSTGRES_PASSWORD"
+      ],
+      "sources": [
+        {
+          "file": "compose.yaml",
+          "line": 2
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "name": "api",
+      "dir": "./api",
+      "technology": "go",
+      "command": {
+        "value": "docker compose -f ../compose.yaml up api",
+        "confidence": "high",
+        "source": {
+          "file": "compose.yaml",
+          "line": 12,
+          "note": "compose service"
+        }
+      },
+      "alternative_commands": [
+        {
+          "value": "go run .",
+          "confidence": "high",
+          "source": {
+            "file": "api/main.go",
+            "line": 1,
+            "note": "package main"
+          }
+        }
+      ],
+      "port": {
+        "value": 8080,
+        "confidence": "high",
+        "source": {
+          "file": "compose.yaml",
+          "line": 15,
+          "note": "published port"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:8080/health",
+        "confidence": "high",
+        "reason": "health route \"/health\" found in api/main.go:10"
+      },
+      "depends_on": [
+        {
+          "name": "db",
+          "kind": "declared",
+          "resolved": true,
+          "source": {
+            "file": "compose.yaml",
+            "line": 17,
+            "note": "depends_on"
+          }
+        },
+        {
+          "name": "cache",
+          "kind": "declared",
+          "resolved": true,
+          "source": {
+            "file": "compose.yaml",
+            "line": 18,
+            "note": "depends_on"
+          }
+        }
+      ],
+      "env_keys": [
+        "DATABASE_URL",
+        "REDIS_URL"
+      ],
+      "sources": [
+        {
+          "file": "compose.yaml",
+          "line": 12
+        },
+        {
+          "file": "api/go.mod"
+        },
+        {
+          "file": "api/Dockerfile"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "name": "web",
+      "dir": "./web",
+      "technology": "node",
+      "framework": "next",
+      "package_manager": "npm",
+      "command": {
+        "value": "docker compose -f ../compose.yaml up web",
+        "confidence": "high",
+        "source": {
+          "file": "compose.yaml",
+          "line": 22,
+          "note": "compose service"
+        }
+      },
+      "alternative_commands": [
+        {
+          "value": "npm run dev",
+          "confidence": "high",
+          "source": {
+            "file": "web/package.json",
+            "line": 5,
+            "note": "script: next dev"
+          }
+        }
+      ],
+      "port": {
+        "value": 3000,
+        "confidence": "high",
+        "source": {
+          "file": "compose.yaml",
+          "line": 26,
+          "note": "published port"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:3000/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "depends_on": [
+        {
+          "name": "api",
+          "kind": "declared",
+          "resolved": true,
+          "source": {
+            "file": "compose.yaml",
+            "line": 29,
+            "note": "depends_on"
+          }
+        }
+      ],
+      "sources": [
+        {
+          "file": "compose.yaml",
+          "line": 22
+        },
+        {
+          "file": "web/package.json"
+        },
+        {
+          "file": "web/next.config.js"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "scan": {
+    "files_seen": 7,
+    "dirs_seen": 3,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}

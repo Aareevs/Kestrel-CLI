@@ -1,0 +1,14 @@
+Project  <root>
+Stack    node
+
+Service candidates (1)
+
+  web-ui  node (vite) · .                                high
+    command  pnpm dev                                    package.json:7
+    port     5174 (high)                                 vite.config.ts:5 · dev server port
+    health   http http://localhost:5174/                 no health endpoint detected; probes the root path
+    needs    localhost:8080? (inferred, not detected as a service)  vite.config.ts:7 · proxies to localhost:8080
+    env      VITE_API_URL, VITE_SENTRY_DSN
+
+Scanned 5 files in 2 directories (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

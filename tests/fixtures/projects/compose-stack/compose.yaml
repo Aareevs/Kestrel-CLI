@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: example
+  cache:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+  api:
+    build: ./api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - cache
+    environment:
+      - DATABASE_URL=postgres://postgres:example@db:5432/postgres
+      - REDIS_URL=redis://cache:6379
+  web:
+    build:
+      context: ./web
+    ports:
+      - target: 3000
+        published: 3000
+    depends_on:
+      api:
+        condition: service_started

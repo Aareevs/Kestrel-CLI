@@ -1,0 +1,15 @@
+Project  <root>
+Stack    go
+
+Service candidates (1)
+
+  orders-api  go (gin) · .                               high
+    command  go run .                                    main.go:1
+    port     8080 (medium)                               main.go:13 · listen address in code
+    health   http http://localhost:8080/healthz          health route "/healthz" found in main.go:12
+    needs    postgres? (inferred, not detected as a service)  go.mod:7 · requires github.com/jackc/pgx/v5
+             redis? (inferred, not detected as a service)  go.mod:8 · requires github.com/redis/go-redis/v9
+    env      DATABASE_URL, PORT, REDIS_URL
+
+Scanned 3 files in 1 directory (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

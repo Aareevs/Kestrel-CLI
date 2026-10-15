@@ -1,0 +1,34 @@
+Project  <root>
+Stack    docker, docker-compose, go, node, postgres, redis
+
+Service candidates (4)
+
+  cache  redis · .                                       high
+    command  docker compose up cache                     compose.yaml:8
+    port     6379 (high)                                 compose.yaml:11 · published port
+    health   tcp localhost:6379                          TCP connect to the redis port
+
+  db  postgres · .                                       high
+    command  docker compose up db                        compose.yaml:2
+    port     5432 (high)                                 compose.yaml:5 · published port
+    health   tcp localhost:5432                          TCP connect to the postgres port
+    env      POSTGRES_PASSWORD
+
+  api  go · ./api                                        high
+    command  docker compose -f ../compose.yaml up api    compose.yaml:12
+             alt: go run .                               api/main.go:1
+    port     8080 (high)                                 compose.yaml:15 · published port
+    health   http http://localhost:8080/health           health route "/health" found in api/main.go:10
+    needs    db (declared)                               compose.yaml:17 · depends_on
+             cache (declared)                            compose.yaml:18 · depends_on
+    env      DATABASE_URL, REDIS_URL
+
+  web  node (next) · ./web                               high
+    command  docker compose -f ../compose.yaml up web    compose.yaml:22
+             alt: npm run dev                            web/package.json:5
+    port     3000 (high)                                 compose.yaml:26 · published port
+    health   http http://localhost:3000/                 no health endpoint detected; probes the root path
+    needs    api (declared)                              compose.yaml:29 · depends_on
+
+Scanned 7 files in 3 directories (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

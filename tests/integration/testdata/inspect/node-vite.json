@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "node"
+  ],
+  "candidates": [
+    {
+      "name": "web-ui",
+      "dir": ".",
+      "technology": "node",
+      "framework": "vite",
+      "package_manager": "pnpm",
+      "command": {
+        "value": "pnpm dev",
+        "confidence": "high",
+        "source": {
+          "file": "package.json",
+          "line": 7,
+          "note": "script: vite"
+        }
+      },
+      "port": {
+        "value": 5174,
+        "confidence": "high",
+        "source": {
+          "file": "vite.config.ts",
+          "line": 5,
+          "note": "dev server port"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:5174/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "depends_on": [
+        {
+          "name": "localhost:8080",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "vite.config.ts",
+            "line": 7,
+            "note": "proxies to localhost:8080"
+          }
+        }
+      ],
+      "env_keys": [
+        "VITE_API_URL",
+        "VITE_SENTRY_DSN"
+      ],
+      "sources": [
+        {
+          "file": "package.json"
+        },
+        {
+          "file": "vite.config.ts"
+        },
+        {
+          "file": ".env.example"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "scan": {
+    "files_seen": 5,
+    "dirs_seen": 2,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}

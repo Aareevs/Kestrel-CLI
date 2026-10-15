@@ -1,0 +1,11 @@
+/bin/
+/dist/
+/kestrel
+/kestrel.exe
+*.test
+*.out
+coverage.*
+.DS_Store
+# A local config at the repo root is personal; fixtures keep their own files.
+/kestrel.yaml
+/.kestrel.yaml

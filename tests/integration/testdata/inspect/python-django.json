@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "python"
+  ],
+  "candidates": [
+    {
+      "name": "python-django",
+      "dir": ".",
+      "technology": "python",
+      "framework": "django",
+      "command": {
+        "value": "python manage.py runserver",
+        "confidence": "high",
+        "source": {
+          "file": "manage.py",
+          "note": "Django management script"
+        }
+      },
+      "port": {
+        "value": 8000,
+        "confidence": "medium",
+        "source": {
+          "file": "manage.py",
+          "note": "Django runserver default port"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:8000/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "depends_on": [
+        {
+          "name": "postgres",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "requirements.txt",
+            "line": 2,
+            "note": "uses psycopg2-binary"
+          }
+        },
+        {
+          "name": "redis",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "requirements.txt",
+            "line": 3,
+            "note": "uses redis"
+          }
+        }
+      ],
+      "env_keys": [
+        "DJANGO_SECRET_KEY",
+        "POSTGRES_DB",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_USER"
+      ],
+      "sources": [
+        {
+          "file": "requirements.txt"
+        },
+        {
+          "file": ".env.example"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "scan": {
+    "files_seen": 4,
+    "dirs_seen": 2,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}

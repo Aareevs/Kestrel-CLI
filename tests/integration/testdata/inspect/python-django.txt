@@ -1,0 +1,15 @@
+Project  <root>
+Stack    python
+
+Service candidates (1)
+
+  python-django  python (django) · .                     high
+    command  python manage.py runserver                  manage.py
+    port     8000 (medium)                               manage.py · Django runserver default port
+    health   http http://localhost:8000/                 no health endpoint detected; probes the root path
+    needs    postgres? (inferred, not detected as a service)  requirements.txt:2 · uses psycopg2-binary
+             redis? (inferred, not detected as a service)  requirements.txt:3 · uses redis
+    env      DJANGO_SECRET_KEY, POSTGRES_DB, POSTGRES_PASSWORD, POSTGRES_USER
+
+Scanned 4 files in 2 directories (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

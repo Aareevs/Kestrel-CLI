@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kestrel-cli/kestrel/docs/kestrel.schema.json",
+  "title": "kestrel.yaml",
+  "description": "Configuration for Kestrel, the local-first debugging CLI. Optional: Kestrel works without it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": { "const": 1, "description": "Config schema version. Must be 1." },
+    "project": { "$ref": "#/$defs/Project" },
+    "storage": { "$ref": "#/$defs/Storage" },
+    "correlation": { "$ref": "#/$defs/Correlation" },
+    "redaction": { "$ref": "#/$defs/Redaction" },
+    "services": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/Service" },
+      "description": "Processes Kestrel may supervise, or external services it only probes."
+    },
+    "verify": { "$ref": "#/$defs/Verify" }
+  },
+  "$defs": {
+    "Duration": {
+      "type": "string",
+      "pattern": "^(\\d+(\\.\\d+)?(ns|us|µs|ms|s|m|h))+$",
+      "description": "Go duration, e.g. \"500ms\", \"2s\", \"1m30s\"."
+    },
+    "Project": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" }
+      }
+    },
+    "Storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "retention_days": { "type": "integer", "minimum": 1, "default": 7 },
+        "max_total_mb": { "type": "integer", "minimum": 1, "default": 500 }
+      }
+    },
+    "Correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "window": { "$ref": "#/$defs/Duration", "default": "10s", "description": "Time window used as a weak correlation signal." }
+      }
+    },
+    "Redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "extra_patterns": {
+          "type": "array",
+          "items": { "type": "string", "format": "regex" },
+          "description": "Additional regular expressions whose matches are redacted."
+        }
+      }
+    },
+    "Service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "anyOf": [{ "required": ["command"] }, { "required": ["health"] }],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$" },
+        "dir": { "type": "string", "description": "Working directory, relative to the project root." },
+        "command": { "type": "string", "description": "Command Kestrel runs for this service (watch/run only)." },
+        "env": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "additionalProperties": { "type": "string" },
+          "description": "Environment. Use ${VAR} to reference your shell environment; resolved values are never stored or shown."
+        },
+        "depends_on": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "health": { "$ref": "#/$defs/Health" }
+      }
+    },
+    "Health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["http", "tcp", "process"] },
+        "url": { "type": "string", "format": "uri", "description": "http probes only." },
+        "address": { "type": "string", "description": "tcp probes only: host:port." },
+        "expect_status": { "type": "string", "pattern": "^[1-5][0-9][0-9](-[1-5][0-9][0-9])?$", "default": "200-399" },
+        "body_contains": { "type": "string", "description": "http probes only: required substring of the response body." },
+        "interval": { "$ref": "#/$defs/Duration", "default": "2s" },
+        "timeout": { "$ref": "#/$defs/Duration", "default": "1s" },
+        "retries": { "type": "integer", "minimum": 0, "default": 3, "description": "Consecutive failures before the service is not ready." },
+        "startup_grace": { "$ref": "#/$defs/Duration", "default": "10s" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "http" } } }, "then": { "required": ["url"] } },
+        { "if": { "properties": { "type": { "const": "tcp" } } }, "then": { "required": ["address"] } }
+      ]
+    },
+    "Verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "checks": { "type": "array", "items": { "$ref": "#/$defs/Check" } }
+      }
+    },
+    "Check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["probe", "command"] },
+        "service": { "type": "string", "description": "probe checks: service whose health probe is re-run." },
+        "run": { "type": "string", "description": "command checks: executed only with --allow-exec or interactive confirmation." },
+        "dir": { "type": "string" },
+        "timeout": { "$ref": "#/$defs/Duration", "default": "120s" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "probe" } } }, "then": { "required": ["service"] } },
+        { "if": { "properties": { "type": { "const": "command" } } }, "then": { "required": ["run"] } }
+      ]
+    }
+  }
+}

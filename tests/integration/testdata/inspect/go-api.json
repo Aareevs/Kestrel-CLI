@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "go"
+  ],
+  "candidates": [
+    {
+      "name": "orders-api",
+      "dir": ".",
+      "technology": "go",
+      "framework": "gin",
+      "command": {
+        "value": "go run .",
+        "confidence": "high",
+        "source": {
+          "file": "main.go",
+          "line": 1,
+          "note": "package main"
+        }
+      },
+      "port": {
+        "value": 8080,
+        "confidence": "medium",
+        "source": {
+          "file": "main.go",
+          "line": 13,
+          "note": "listen address in code"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:8080/healthz",
+        "confidence": "medium",
+        "reason": "health route \"/healthz\" found in main.go:12"
+      },
+      "depends_on": [
+        {
+          "name": "postgres",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "go.mod",
+            "line": 7,
+            "note": "requires github.com/jackc/pgx/v5"
+          }
+        },
+        {
+          "name": "redis",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "go.mod",
+            "line": 8,
+            "note": "requires github.com/redis/go-redis/v9"
+          }
+        }
+      ],
+      "env_keys": [
+        "DATABASE_URL",
+        "PORT",
+        "REDIS_URL"
+      ],
+      "sources": [
+        {
+          "file": "go.mod"
+        },
+        {
+          "file": ".env.example"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "scan": {
+    "files_seen": 3,
+    "dirs_seen": 1,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}
