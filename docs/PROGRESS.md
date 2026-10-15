@@ -75,7 +75,7 @@ Stability: the full integration suite passed 9 of 9 runs, 3 of them under 8 CPU 
 
 ### Before a first release (your to-do list; also in releasing.md)
 
-1. Create `github.com/Aareevs/homebrew-tap`, and add a `HOMEBREW_TAP_TOKEN` secret that can push to it.
+1. ✅ Done 2026-10-15: `github.com/Aareevs/homebrew-tap` exists (public), and the `HOMEBREW_TAP_TOKEN` secret is set.
 2. Optionally record the demo: `vhs docs/assets/demo.tape`, then commit the GIF and reference it in the README.
 3. Tag `vX.Y.Z` and push the tag, review the draft release, then publish it.
 

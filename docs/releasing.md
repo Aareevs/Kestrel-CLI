@@ -38,9 +38,12 @@ KESTREL_VERSION=<snapshot version from dist/> KESTREL_DOWNLOAD_BASE=file:///tmp/
 
 ## Before the first release (one-time setup)
 
-1. **Create the tap repository** `github.com/Aareevs/homebrew-tap` (public, can be empty).
-2. **Create a token** that can push to it: a fine-grained PAT with *Contents: read and write* on `homebrew-tap`
-   only. Add it to this repository's secrets as `HOMEBREW_TAP_TOKEN`.
+1. ✅ **Create the tap repository** `github.com/Aareevs/homebrew-tap` (public). Done 2026-10-15.
+2. ✅ **Create a token** that can push to it: a fine-grained PAT with *Contents: read and write* on `homebrew-tap`
+   only, saved in this repository's Actions secrets as `HOMEBREW_TAP_TOKEN`. Done 2026-10-15. Whether it can
+   push is first exercised when a release is published. If the `homebrew` workflow fails then, create a new
+   token, update the secret, and re-run the workflow. Renew the token before it expires (it was created with a
+   one-year expiry), or the `homebrew` workflow will fail on the next release.
 3. **Check the README** install section: it says the one-liner and Homebrew start working with the first release.
 
 ## Cutting a release
