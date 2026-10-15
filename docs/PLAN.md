@@ -19,7 +19,7 @@ we are executing it, the decisions made along the way, and the risks we are watc
 | 3 | Persistence: SQLite, migrations, log segments, sessions, retention, `cleanup`, `sessions` | A session is persisted, listed, shown, exported (redacted), and deleted; retention test passes | done (see PROGRESS.md) |
 | 4 | Correlation + diagnosis: graph, incidents, timeline, rule engine, `timeline`, `diagnose` | Scenarios A, B, C, D, I golden; every hypothesis has evidence IDs | done (see PROGRESS.md) |
 | 5 | Verification: `verify`, stability window, authorized exec, before/after | Scenario E; exec refused without authorization (tested) | done (see PROGRESS.md) |
-| 6 | MCP server (read-only, reuses `internal/app`) | test client retrieves real diagnosis; redaction verified | planned |
+| 6 | MCP server (read-only, reuses `internal/app`) | test client retrieves real diagnosis; redaction verified | done (see PROGRESS.md) |
 | 7 | Hardening + release: Scenarios F, G, H, J; GoReleaser; install script; tap; final README | `goreleaser release --snapshot --clean` succeeds | planned |
 
 ## Phase 1 breakdown
@@ -107,6 +107,19 @@ we are executing it, the decisions made along the way, and the risks we are watc
   without one.
 - **Liveness alone isn't progress.** A process that is up but failing its probe is `still_failing`, not partially
   fixed. And "no new errors" with nothing to probe is `inconclusive`.
+
+## Phase 6 decisions
+
+- **The official Go SDK, pinned** (`github.com/modelcontextprotocol/go-sdk` v1.8.0, released 2026-09-04), as the
+  spec says. Its typed `AddTool` gives every tool input and output schemas derived from `pkg/api`, so the MCP
+  contract is the same as `--format json`.
+- **Read-only by construction**, not by policy. No tool reaches anything that starts, stops, signals, executes,
+  or writes, including `verify`. The tool annotations say so (`readOnlyHint`, closed world).
+- **Log text is untrusted.** The server instructions and tool descriptions tell the agent that event messages are
+  process output, never instructions, and that hypotheses aren't facts.
+- **Redact on the way out again**, per string on the decoded result, with the project's current patterns.
+- **Three small read-only queries were added to `internal/app`** (`Services`, `RecentErrors`,
+  `VerificationResults`) rather than putting logic in the MCP layer.
 
 ## Risks
 

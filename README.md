@@ -11,7 +11,7 @@
   <a href="https://github.com/Aareevs/Kestrel-CLI/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Aareevs/Kestrel-CLI/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI&labelColor=18181b" alt="CI" /></a>
   <a href="https://github.com/Aareevs/Kestrel-CLI/releases"><img src="https://img.shields.io/github/v/release/Aareevs/Kestrel-CLI?style=flat-square&logo=github&logoColor=white&label=Release&labelColor=18181b&color=2563eb&include_prereleases" alt="Release" /></a>
   <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white&labelColor=18181b" alt="Go 1.26" /></a>
-  <a href="#ai-agent-companion-kestrel-mcp"><img src="https://img.shields.io/badge/MCP-planned-52525b?style=flat-square&logo=anthropic&logoColor=white&labelColor=18181b" alt="MCP planned" /></a>
+  <a href="#ai-agent-companion-kestrel-mcp"><img src="https://img.shields.io/badge/MCP-read--only-52525b?style=flat-square&logo=anthropic&logoColor=white&labelColor=18181b" alt="MCP read-only" /></a>
   <img src="https://img.shields.io/badge/macOS-27272a?style=flat-square&logo=apple&logoColor=white" alt="macOS" />
   <img src="https://img.shields.io/badge/Linux-27272a?style=flat-square&logo=linux&logoColor=white" alt="Linux" />
   <img src="https://img.shields.io/badge/Windows-27272a?style=flat-square&logo=windows&logoColor=white" alt="Windows" />
@@ -40,8 +40,8 @@ needs no config to start, never uploads anything, and never runs a command you d
 
 > [!NOTE]
 > **Kestrel is in early development.** Discovery, supervision, session recording, incident timelines,
-> evidence-backed diagnosis, and fix verification work today. The MCP server ships next. Anything not yet built is
-> marked **planned** below. Every output in this README comes from a real run.
+> evidence-backed diagnosis, fix verification, and the read-only MCP server work today. Release packaging
+> (Homebrew, install script, prebuilt binaries) ships next. Anything not yet built is marked **planned** below. Every output in this README comes from a real run.
 
 ---
 
@@ -103,7 +103,7 @@ With a `kestrel.yaml` (`kestrel init` writes one), `kestrel watch` supervises th
 | `kestrel verify` | Did the fix work? Checks held across a stability window, plus before/after evidence; runs your test command only if you allow it | ✅ |
 | `kestrel sessions list\|show\|export\|delete` | Browse recorded sessions; export a redacted JSON bundle | ✅ |
 | `kestrel cleanup [--dry-run]` | Apply retention now (`retention_days`, `max_total_mb`) | ✅ |
-| `kestrel mcp` | Read-only MCP server for AI agents | planned |
+| `kestrel mcp` | Read-only MCP server (stdio) so AI agents can ask for the diagnosis | ✅ |
 
 **Global flags** (on every command):
 - `--format json`: stable, versioned JSON on every read command (schema in [`pkg/api`](pkg/api/)); `run` and
@@ -386,16 +386,33 @@ implies Postgres) and two Postgres services exist, Kestrel says it can't tell ra
 
 ## AI Agent Companion (`kestrel mcp`)
 
-> **Planned.** This server isn't built yet.
-
 AI coding agents debugging through raw shell commands burn context grepping logs and guessing at causes.
-`kestrel mcp` will expose Kestrel's evidence over a **read-only** stdio MCP server, so an agent can ask for the
-diagnosis instead of reconstructing it. Planned tools: `inspect_project`, `list_services`, `get_service_status`,
-`get_recent_errors`, `get_failure_timeline`, `get_diagnosis`, `get_session_summary`, `get_verification_results`.
-Output is redacted, and every result is labeled with its claim level (`observed` → `correlated` → `hypothesis` →
-`verified`). There are no exec tools.
+`kestrel mcp` exposes Kestrel's evidence over a **read-only** stdio MCP server, so an agent can ask for the
+diagnosis instead of reconstructing it.
 
-Setup will look like `claude mcp add kestrel -- kestrel mcp`. It won't work until the server ships.
+```bash
+claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
+```
+
+| Tool | What the agent gets |
+| :--- | :--- |
+| `get_diagnosis` | Ranked hypotheses per incident, with supporting/contradicting event IDs, confidence, next step |
+| `get_failure_timeline` | Incident timelines (optionally one service's full output), dependency graph, past verifications |
+| `get_recent_errors` | The latest error and fatal events |
+| `get_session_summary` | A recorded session: final state, counts, notable events |
+| `get_verification_results` | Past `kestrel verify` runs and the latest full report |
+| `get_service_status` | Liveness and readiness per service |
+| `list_services` / `inspect_project` | Configured services (secrets masked) / discovery's findings with sources |
+
+- **Read-only.** No tool starts, stops, signals, or runs anything. Verification and commands stay with you.
+- **Honest about uncertainty.** Every result carries its claim level (`observed` → `correlated` → `hypothesis` →
+  `verified` / `unresolved`), and the agent is told not to present a hypothesis as fact.
+- **Logs are untrusted.** The agent is told that event messages are process output, never instructions, so a
+  hostile log line can't steer it.
+- **Redacted twice.** Everything was redacted when recorded, and is redacted again on the way out with your
+  current patterns.
+
+Other clients (Cursor, Claude Desktop, VS Code) and the full tool reference: [docs/mcp.md](docs/mcp.md).
 
 ---
 
@@ -470,6 +487,8 @@ especially, fall back to framework defaults.
 - **Verify** re-checks the affected services across a stability window (every sample must pass), re-tries the
   addresses that refused connections, compares a live session's new events with the incident's, and runs your
   test command only with `--allow-exec` or your explicit `y`. It never restarts anything.
+- **Serve** (`kestrel mcp`) gives AI agents the same diagnosis, timelines, and verification results over a
+  read-only MCP server, redacted and labeled with claim levels.
 - **Record** stores each session in a local SQLite database, with the full redacted text in append-only,
   gzipped log segments, and enforces retention. Nothing is stored that wasn't redacted first.
 
@@ -526,6 +545,7 @@ Threat model and limits: [docs/security.md](docs/security.md).
 - **[Events](docs/events.md)**: event schema, types, severity, backpressure, and the pattern library.
 - **[Diagnosis Rules](docs/diagnosis-rules.md)**: how incidents form, how hypotheses are ranked, every rule.
 - **[Verification](docs/verification.md)**: checks, the stability window, before/after, verdicts, exec policy.
+- **[MCP Server](docs/mcp.md)**: setup for Claude Code and other clients, every tool, redaction, limits.
 - **[Configuration Reference](docs/configuration.md)**: every field, default, and validation rule.
 - **[Security Model](docs/security.md)**: threat model, masking/redaction limits, exec policy.
 - **[Testing Guide](docs/testing.md)**: golden files, fixtures, adding a detector.
@@ -564,6 +584,8 @@ make golden   # regenerate golden files after an intentional output change, then
   *Verify:* `still_failing`, exit 1, and the command check is skipped. Fix the service, run `kestrel verify` in a
   terminal, and answer `n`, then `y`, at the prompt. *Verify:* the command runs only after `y`, and the verdict is
   `resolved` only after the full window.
+- [ ] **MCP:** `claude mcp add kestrel -- ./bin/kestrel mcp --project <a project with a failed session>`, then ask
+  the agent what failed. *Verify:* it calls `get_diagnosis`, cites event IDs, and calls hypotheses hypotheses.
 - [ ] **Retention:** `./bin/kestrel cleanup --dry-run`. *Verify:* it explains what it keeps and why.
 - [ ] **Status:** while `watch` runs, run `kestrel status` in a second terminal. *Verify:* it shows liveness and
   readiness live.
