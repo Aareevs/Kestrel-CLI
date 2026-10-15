@@ -252,6 +252,11 @@ func TestShutdownLeavesNoOrphans(t *testing.T) {
 	}
 	_, _, cancel, done := harness(t, specs, Options{StopGrace: 300 * time.Millisecond})
 	pids := readPIDs(t, pidfile, 6) // a + 2 children, b + 1 child, c
+	for _, pid := range pids {
+		if !running(pid) {
+			t.Fatalf("pid %d exited before shutdown; the orphan check would be vacuous", pid)
+		}
+	}
 	start := time.Now()
 	cancel()
 	select {

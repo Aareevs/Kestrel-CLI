@@ -73,7 +73,11 @@ func main() {
 		appendPID(os.Getpid())
 	}
 	if *sleepMode {
-		select {}
+		// Not `select {}`: with no other goroutines the runtime treats that
+		// as a deadlock and kills the process at once.
+		for {
+			time.Sleep(time.Hour)
+		}
 	}
 	for i := 0; i < *children; i++ {
 		args := []string{"--sleep"}
