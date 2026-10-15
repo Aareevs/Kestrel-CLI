@@ -112,7 +112,7 @@ var Patterns = []Pattern{
 			`dial tcp\S* (?P<target>\S+?:\d+): connect: connection refused` +
 			`|ECONNREFUSED (?P<target2>\S+?:\d+)` +
 			`|proxying request \S+ to https?://(?P<target3>[^/\s]+)\S* \[ECONNREFUSED\]` +
-			`|connect ECONNREFUSED` +
+			`|connect ECONNREFUSED(?: (?P<target4>\S+?:\d+))?` +
 			`|connection refused` +
 			`|Connection refused)`),
 		Match: []string{
