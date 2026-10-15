@@ -43,7 +43,7 @@ we are executing it, the decisions made along the way, and the risks we are watc
 
 ## Key decisions
 
-- **Module path** `github.com/kestrel-cli/kestrel` is a placeholder until the real repository location is known.
+- **Module path** `github.com/Aareevs/Kestrel-CLI`, matching the GitHub repository.
 - **Project root resolution**: `--project` if given; otherwise the nearest ancestor of the working directory
   containing `kestrel.yaml` / `.kestrel.yaml`; otherwise the working directory. Both config names present → error.
 - **Global flags** in Phase 1: `--project`, `--format`, `--verbose`, `--quiet`, `--no-color`. `--session` is
@@ -68,4 +68,4 @@ we are executing it, the decisions made along the way, and the risks we are watc
 - The hand-written `.gitignore` matcher does not implement every corner of git's semantics (documented).
 - Go 1.26 vs. staticcheck release compatibility; CI pins a version and we record what actually ran.
 - Windows Job Objects (Phase 2) cannot be exercised on this macOS machine; only cross-compiled.
-- No license chosen yet — needs the owner's decision.
+- No license chosen yet; needs the owner's decision.

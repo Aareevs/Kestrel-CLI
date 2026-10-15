@@ -9,12 +9,12 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/kestrel-cli/kestrel/internal/app"
-	"github.com/kestrel-cli/kestrel/internal/buildinfo"
-	"github.com/kestrel-cli/kestrel/internal/config"
-	"github.com/kestrel-cli/kestrel/internal/discovery"
-	"github.com/kestrel-cli/kestrel/internal/output"
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/internal/app"
+	"github.com/Aareevs/Kestrel-CLI/internal/buildinfo"
+	"github.com/Aareevs/Kestrel-CLI/internal/config"
+	"github.com/Aareevs/Kestrel-CLI/internal/discovery"
+	"github.com/Aareevs/Kestrel-CLI/internal/output"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 func inspectFlags(cmd *cobra.Command, o *app.InspectOptions) {

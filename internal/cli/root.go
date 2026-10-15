@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kestrel-cli/kestrel/internal/app"
-	"github.com/kestrel-cli/kestrel/internal/output"
+	"github.com/Aareevs/Kestrel-CLI/internal/app"
+	"github.com/Aareevs/Kestrel-CLI/internal/output"
 )
 
 // Exit codes (documented in README).

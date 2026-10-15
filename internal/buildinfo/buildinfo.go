@@ -1,13 +1,13 @@
 // Package buildinfo exposes version metadata set at link time:
 //
-//	go build -ldflags "-X github.com/kestrel-cli/kestrel/internal/buildinfo.Version=v1.0.0 ..."
+//	go build -ldflags "-X github.com/Aareevs/Kestrel-CLI/internal/buildinfo.Version=v1.0.0 ..."
 package buildinfo
 
 import (
 	"runtime"
 	"runtime/debug"
 
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 // Set by -ldflags at release time.

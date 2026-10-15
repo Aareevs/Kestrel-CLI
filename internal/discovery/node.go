@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 type packageJSON struct {

@@ -1,4 +1,4 @@
-module github.com/kestrel-cli/kestrel
+module github.com/Aareevs/Kestrel-CLI
 
 go 1.26.2
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 // TextOptions control human-readable rendering.

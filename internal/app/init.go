@@ -12,8 +12,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/kestrel-cli/kestrel/internal/config"
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/internal/config"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 // ErrConfigExists is returned by WriteConfig when a config file is already present.

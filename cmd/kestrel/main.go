@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kestrel-cli/kestrel/internal/cli"
+	"github.com/Aareevs/Kestrel-CLI/internal/cli"
 )
 
 func main() {

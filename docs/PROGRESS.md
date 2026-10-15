@@ -57,6 +57,5 @@ The GitHub Actions workflow is written but hasn't run yet: there's no remote.
   aren't detected.
 - Compose: only the first published port per service is used. Override files (`compose.override.yaml`) and
   profiles are ignored.
-- No license yet; the module path `github.com/kestrel-cli/kestrel` is a placeholder (badges and the clone URL
-  in the README depend on it).
+- No license chosen yet.
 - `docs/assets/demo.gif` hasn't been generated (VHS isn't installed). Only the `.tape` is committed.

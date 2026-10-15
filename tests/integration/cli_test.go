@@ -16,8 +16,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kestrel-cli/kestrel/internal/cli"
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/internal/cli"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")

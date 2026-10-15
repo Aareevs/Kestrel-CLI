@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 // analyze runs every analyzer over the scanned directories and then

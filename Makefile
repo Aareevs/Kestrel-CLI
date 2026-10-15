@@ -1,6 +1,6 @@
 # Kestrel developer tasks. `make check` runs every quality gate.
 
-PKG      := github.com/kestrel-cli/kestrel
+PKG      := github.com/Aareevs/Kestrel-CLI
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT   ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)

@@ -1,66 +1,118 @@
-<div align="center">
+<p align="center">
+  <img src="docs/assets/kestrel-banner.png" alt="Kestrel: Every failure has a trail." width="100%" />
+</p>
 
-<img src="docs/assets/logo.svg" width="96" alt="Kestrel logo">
+<p align="center">
+  <strong>Stop guessing why your dev stack broke.</strong><br>
+  Local-first debugging intelligence: what failed, in what order, why, and whether your fix actually worked.
+</p>
 
-# Kestrel
+<p align="center">
+  <a href="https://github.com/Aareevs/Kestrel-CLI/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Aareevs/Kestrel-CLI/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI&labelColor=18181b" alt="CI" /></a>
+  <a href="https://github.com/Aareevs/Kestrel-CLI/releases"><img src="https://img.shields.io/github/v/release/Aareevs/Kestrel-CLI?style=flat-square&logo=github&logoColor=white&label=Release&labelColor=18181b&color=2563eb&include_prereleases" alt="Release" /></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white&labelColor=18181b" alt="Go 1.26" /></a>
+  <a href="#ai-agent-companion-kestrel-mcp"><img src="https://img.shields.io/badge/MCP-planned-52525b?style=flat-square&logo=anthropic&logoColor=white&labelColor=18181b" alt="MCP planned" /></a>
+  <img src="https://img.shields.io/badge/macOS-27272a?style=flat-square&logo=apple&logoColor=white" alt="macOS" />
+  <img src="https://img.shields.io/badge/Linux-27272a?style=flat-square&logo=linux&logoColor=white" alt="Linux" />
+  <img src="https://img.shields.io/badge/Windows-27272a?style=flat-square&logo=windows&logoColor=white" alt="Windows" />
+  <img src="https://img.shields.io/badge/License-TBD-52525b?style=flat-square&labelColor=18181b" alt="License: TBD" />
+</p>
 
-**Every failure has a trail.**
+<p align="center">
+  <a href="#quick-install">Quick Install</a>
+  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+  <a href="#30-second-quickstart">30s Quickstart</a>
+  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+  <a href="#what-it-looks-like">Example</a>
+  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+  <a href="#why-kestrel">Why Kestrel?</a>
+  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+  <a href="#supported-ecosystems">Ecosystems</a>
+  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
+  <a href="#documentation">Documentation</a>
+</p>
 
-[![ci](https://github.com/kestrel-cli/kestrel/actions/workflows/ci.yml/badge.svg)](https://github.com/kestrel-cli/kestrel/actions/workflows/ci.yml)
-![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)
-![License](https://img.shields.io/badge/license-TBD-lightgrey)
-![Release](https://img.shields.io/badge/release-unreleased-lightgrey)
+---
 
-</div>
+Kestrel watches the services in your local stack, reconstructs what broke and in what order, ranks root-cause
+hypotheses backed by the exact events that support them, and verifies whether your fix held. It runs offline,
+needs no config to start, never uploads anything, and never runs a command you didn't ask for.
 
-Kestrel is a local-first debugging CLI for your dev stack. It watches the services you run, reconstructs what
-broke and in what order, ranks root-cause hypotheses backed by the exact events that support them, and checks
-whether your fix actually worked. It runs offline, needs no config to start, and never executes anything you
-didn't ask it to.
+> [!NOTE]
+> **Kestrel is in early development.** Project discovery (`inspect`, `init`) and config tooling work today.
+> Supervision, timelines, diagnosis, verification, and the MCP server ship in phases. Anything not yet built is
+> marked **planned** below. Every output in this README comes from a real run.
 
-> **Status: early development.** Project discovery (`inspect`, `init`) and config tooling work today.
-> Supervision, timelines, diagnosis, and verification are being built in phases; they're marked *planned*
-> below. This README only shows what works now.
+---
 
-<!-- Demo: docs/assets/demo.tape renders docs/assets/demo.gif with VHS. Not yet generated. -->
+## Quick Install
 
-## Install
-
-Kestrel has no tagged release yet. For now, build it from source (Go 1.26+):
-
-```sh
-git clone https://github.com/kestrel-cli/kestrel
-cd kestrel
-make build          # → ./bin/kestrel
+### 1. Go Install (any platform with Go 1.26+)
+```bash
+go install github.com/Aareevs/Kestrel-CLI/cmd/kestrel@latest
 ```
 
-*Planned:* a one-line install script, a Homebrew tap, and `go install …@latest` once releases are published.
+### 2. From Source
+```bash
+git clone https://github.com/Aareevs/Kestrel-CLI
+cd Kestrel-CLI
+make build        # → ./bin/kestrel
+```
 
-## Quick start
+### Coming with the first release
+Homebrew tap, a `curl … | sh` installer with SHA-256 verification, and prebuilt binaries for macOS (Apple
+Silicon and Intel), Linux (x86_64 and ARM64), and Windows (x64) on the
+[Releases page](https://github.com/Aareevs/Kestrel-CLI/releases).
 
-```sh
+---
+
+## 30-Second Quickstart
+
+```bash
 cd your-project
-kestrel inspect     # what's here, how it probably runs, and how sure Kestrel is
-kestrel init        # propose a kestrel.yaml from that; asks before writing
+
+# 1. Inspect: what's here, how it probably runs, and how sure Kestrel is
+kestrel inspect
+
+# 2. Init: turn that into a kestrel.yaml (asks before writing, never overwrites)
+kestrel init
+
+# 3. Check: validate the config and Kestrel's own setup
+kestrel config validate && kestrel doctor
 ```
 
-## Features
+### Commands
 
-| | Status |
-|---|---|
-| **Zero-config discovery**: detects services, start commands, ports, health checks, and dependencies from the files already in your repo, each with its source file/line and a confidence level ([details](docs/architecture.md#discovery)) | available |
-| **Config you can trust**: strict `kestrel.yaml` validation with line numbers, typo suggestions, cycle detection, and a [JSON Schema](docs/kestrel.schema.json) for editor completion ([reference](docs/configuration.md)) | available |
-| **Secrets stay masked**: `.env` is never read; `config show` masks literal secrets ([security](docs/security.md)) | available |
-| Process supervision with clean shutdown and bounded log capture (`run`, `watch`, `status`) | planned |
-| Incident timeline and evidence-backed diagnosis (`timeline`, `diagnose`) | planned |
-| Fix verification over a stability window (`verify`) | planned |
-| Session storage, retention, redacted export (`sessions`, `cleanup`) | planned |
-| Read-only MCP server for AI assistants (`mcp`) | planned |
+| Command | Description | Status |
+| :--- | :--- | :---: |
+| `kestrel inspect` | Detected technologies and service candidates, each with its source file:line and confidence | ✅ |
+| `kestrel init` | Propose a `kestrel.yaml` from discovery (`--yes`, `--print`); never overwrites | ✅ |
+| `kestrel config show` / `validate` / `path` | Effective config with secrets masked, strict validation, location | ✅ |
+| `kestrel doctor` | Self-check: platform, data directory, config, tools | ✅ |
+| `kestrel version` | Version and build info | ✅ |
+| `kestrel run -- <cmd>` | Wrap any command and record a session, no config needed | planned |
+| `kestrel watch` / `status` | Supervise services; liveness vs. readiness | planned |
+| `kestrel timeline` | Incident timeline: last healthy state → first anomaly → downstream symptoms | planned |
+| `kestrel diagnose` | Ranked, evidence-backed hypotheses with a concrete next step | planned |
+| `kestrel verify` | Post-fix checks over a stability window | planned |
+| `kestrel sessions` / `cleanup` | Session history, redacted export, retention | planned |
+| `kestrel mcp` | Read-only MCP server for AI agents | planned |
 
-## Example
+**Global flags** (on every command):
+- `--format json`: stable, versioned JSON on every read command (schema in [`pkg/api`](pkg/api/api.go)).
+- `--project <dir>`: project root (default: nearest ancestor with `kestrel.yaml`, else the current directory).
+- `-v` / `--verbose`: diagnostic logging to stderr. `-q` / `--quiet`: essential output only.
+- `--no-color`: plain output (`NO_COLOR` and non-TTY output are detected automatically).
 
-`kestrel inspect` on [a compose project](tests/fixtures/projects/compose-stack) with a Postgres database, a
-Redis cache, a Go API, and a Next.js frontend. This is real output, taken from the golden test:
+**Exit codes:** `0` ok · `1` failure detected / verification failed · `2` invalid usage or config ·
+`3` inconclusive investigation · `4` internal error.
+
+---
+
+## What It Looks Like
+
+`kestrel inspect` on [a compose project](tests/fixtures/projects/compose-stack) with Postgres, Redis, a Go API,
+and a Next.js frontend. This is real output, taken from the golden test:
 
 ```text
 Project  ~/src/compose-stack
@@ -99,74 +151,87 @@ Scanned 7 files in 3 directories (depth ≤ 3). Nothing was executed.
 Next: kestrel init   # propose a kestrel.yaml from these candidates
 ```
 
-Here the compose services `api` and `web` are merged with the Go and Node projects they build, so they appear
-once each. A dependency Kestrel only *inferred* (say, `pgx` in `go.mod` pointing to Postgres) is labeled
-`inferred`. If it can't tell which service is meant, it says so and doesn't guess.
+Every claim points to the file and line it came from. `api` and `web` appear once even though they're defined
+both in compose and as their own Go/Node projects. When a dependency is only *inferred* (say, `pgx` in `go.mod`
+implies Postgres) and two Postgres services exist, Kestrel says it can't tell rather than guessing.
 
-The database → API → frontend failure walkthrough will go here once diagnosis ships.
+*Planned:* the database → API → frontend failure walkthrough with `kestrel diagnose`, once diagnosis ships.
 
-## Supported stacks
+---
 
-Detection support today. "Full" means command, port, and dependency detection all work. "Partial" means some
-of them are conventions rather than read from your files.
+## AI Agent Companion (`kestrel mcp`)
+
+> **Planned.** This server isn't built yet.
+
+AI coding agents debugging through raw shell commands burn context grepping logs and guessing at causes.
+`kestrel mcp` will expose Kestrel's evidence over a **read-only** stdio MCP server, so an agent can ask for the
+diagnosis instead of reconstructing it. Planned tools: `inspect_project`, `list_services`, `get_service_status`,
+`get_recent_errors`, `get_failure_timeline`, `get_diagnosis`, `get_session_summary`, `get_verification_results`.
+Output is redacted, and every result is labeled with its claim level (`observed` → `correlated` → `hypothesis` →
+`verified`). There are no exec tools.
+
+Setup will look like `claude mcp add kestrel -- kestrel mcp`. It won't work until the server ships.
+
+---
+
+## Why Kestrel?
+
+| | Kestrel | Scrolling logs | `docker compose logs` | LLM reading logs |
+| :--- | :---: | :---: | :---: | :---: |
+| **Zero configuration to start** | ✓ | ✓ | — (needs compose) | ✓ |
+| **Every finding cites file:line or event ID** | ✓ | — | — | — |
+| **Separates observed facts from guesses** | ✓ | — | — | — |
+| **Works offline, nothing uploaded** | ✓ | ✓ | ✓ | — |
+| **Never executes anything it finds** | ✓ | ✓ | ✓ | — |
+| **Ordered incident timeline across services** | planned | — | Partial (interleaved) | — |
+| **Verifies the fix over a stability window** | planned | — | — | — |
+
+---
+
+## Supported Ecosystems
+
+<p align="center">
+  <img src="https://skillicons.dev/icons?i=nodejs,nextjs,vite,express,go,python,django,fastapi,flask,java,spring,ruby,rails,php,laravel,rust,docker&theme=dark" alt="Supported technologies" />
+</p>
 
 | Stack | Detected from | Support |
-|---|---|---|
-| Node.js: Vite, Next.js, Nuxt, Astro, SvelteKit, Angular, CRA, NestJS, Express… | `package.json` scripts, lockfile → npm/pnpm/yarn/bun, `vite.config.*` etc. | full |
-| Go: gin, echo, fiber, chi, net/http | `go.mod`, `main.go`, `cmd/*/main.go`, listen addresses and health routes in code | full |
-| Docker Compose | `compose.yaml` / `docker-compose.yml`: services, published ports, `depends_on`, build contexts | full |
-| Python: Django, FastAPI, Flask (pip, uv, Poetry, Pipenv) | `manage.py`, `pyproject.toml`, `requirements.txt`, `Pipfile` | partial (ports are framework defaults unless set in code) |
-| Java: Spring Boot (Maven, Gradle) | `pom.xml`, `build.gradle(.kts)`, `application.properties/yml` | partial |
-| Ruby on Rails, Sinatra | `Gemfile` | partial |
-| PHP: Laravel | `composer.json`, `artisan` | partial |
-| Rust: axum, actix-web, rocket, warp | `Cargo.toml`, `src/main.rs` | partial |
-| Dockerfile only | `EXPOSE` | partial |
+| :--- | :--- | :---: |
+| **Node.js**: Vite, Next.js, Nuxt, Astro, SvelteKit, Angular, CRA, NestJS, Express… | `package.json` scripts, lockfile → npm/pnpm/yarn/bun, `vite.config.*`, dev-server proxies | full |
+| **Go**: gin, echo, fiber, chi, net/http | `go.mod`, `main.go`, `cmd/*/main.go`, listen addresses and health routes in code | full |
+| **Docker Compose** | services, published ports, `depends_on`, build contexts | full |
+| **Python**: Django, FastAPI, Flask (pip, uv, Poetry, Pipenv) | `manage.py`, `pyproject.toml`, `requirements.txt`, `Pipfile` | partial |
+| **Java**: Spring Boot (Maven, Gradle) | `pom.xml`, `build.gradle(.kts)`, `application.properties/yml` | partial |
+| **Ruby**: Rails, Sinatra | `Gemfile` | partial |
+| **PHP**: Laravel | `composer.json`, `artisan` | partial |
+| **Rust**: axum, actix-web, rocket, warp | `Cargo.toml`, `src/main.rs` | partial |
+| **Dockerfile only** | `EXPOSE` | partial |
 
-## Commands
+"Full" means the command, port, and dependencies are read from your files. "Partial" means some of them, ports
+especially, fall back to framework defaults.
 
-| Command | What it does | Status |
-|---|---|---|
-| `kestrel inspect` | Detected technologies and service candidates, with sources and confidence | available |
-| `kestrel init` | Propose a `kestrel.yaml`; confirms before writing (`--yes`, `--print`); never overwrites | available |
-| `kestrel config show\|validate\|path` | Effective config (secrets masked), validation, location | available |
-| `kestrel doctor` | Self-check: platform, data directory, config, tools | available |
-| `kestrel version` | Version and build info | available |
-| `kestrel run -- <cmd>` | Wrap one command and record a session, no config needed | planned |
-| `kestrel watch` / `status` | Supervise services; liveness and readiness | planned |
-| `kestrel timeline` / `diagnose` | Incident timeline; ranked hypotheses with evidence | planned |
-| `kestrel verify` | Post-fix checks over a stability window | planned |
-| `kestrel sessions` / `cleanup` | Session history, export, retention | planned |
-| `kestrel mcp` | Read-only MCP server (stdio) | planned |
+- **Dependency inference**: client libraries (`pgx`, `ioredis`, `psycopg2`, …), `.env.example` names, and
+  dev-server proxies are linked to detected services, but only when the match is unambiguous.
+- **Bounded and safe**: depth, file-count, file-size, and time limits; honors `.gitignore`; refuses symlinks
+  that escape the project; never opens `.env`.
 
-**Global flags:** `--project <dir>`, `--format text|json` (every read command), `--verbose`, `--quiet`,
-`--no-color` (also honors `NO_COLOR`).
+---
 
-**Exit codes:**
-
-| Code | Meaning |
-|---|---|
-| `0` | OK |
-| `1` | Project failure detected / verification failed |
-| `2` | Invalid usage or invalid config |
-| `3` | Incomplete or inconclusive investigation |
-| `4` | Internal error (including a failed `doctor` check) |
-
-## How it works
+## How It Works
 
 ```text
- collect ──▶ normalize ──▶ correlate ──▶ diagnose ──▶ verify
- (process     (typed events,  (incidents,    (ranked,        (stability
-  output,      redaction)      dependency     evidence-       window,
-  probes)                      graph)         backed)         before/after)
+ discover ──▶ collect ──▶ normalize ──▶ correlate ──▶ diagnose ──▶ verify
+ (available)  (planned: process output, probes, typed events, redaction, incidents,
+              dependency graph, ranked evidence-backed hypotheses, stability window)
 ```
 
-Today only the step before all of these exists: **discovery**. It reads (never runs) your project files to
-work out what the services are. See [docs/architecture.md](docs/architecture.md).
+Discovery reads, never runs, your project files to work out what the services are and how they connect.
+Everything after it builds on that. See the [architecture doc](docs/architecture.md).
+
+---
 
 ## Configuration
 
-Optional. Without a config, Kestrel works from discovery alone. With `kestrel.yaml` (or `.kestrel.yaml`) at the
-project root:
+Optional. With `kestrel.yaml` (or `.kestrel.yaml`) at the project root:
 
 ```yaml
 version: 1
@@ -181,44 +246,63 @@ services:
     health: { type: http, url: http://localhost:8080/health }
 ```
 
-Full reference: [docs/configuration.md](docs/configuration.md). Kestrel finds the project root by looking for
-the config in the current directory and its parents; `--project` overrides that.
+Validation is strict: unknown keys are errors, every problem comes with a line number, typos get "did you
+mean", and dependency cycles are rejected. A [JSON Schema](docs/kestrel.schema.json) enables editor completion.
+Full reference: [docs/configuration.md](docs/configuration.md).
 
-## Privacy & storage
+---
 
-- Discovery reads files only, stays inside the project root (symlinks that escape it are refused), skips
-  `node_modules`, `vendor`, `.git`, build output, and anything in `.gitignore`, and never opens `.env`.
-  From `.env.example` it takes variable *names* only.
-- Nothing is uploaded. Kestrel makes no network calls.
-- Kestrel's own data directory is outside your repo: `~/Library/Application Support/Kestrel` (macOS),
-  `$XDG_DATA_HOME/kestrel` or `~/.local/share/kestrel` (Linux), `%LOCALAPPDATA%\Kestrel` (Windows).
-  Override with `KESTREL_HOME`. No sessions are stored yet.
+## Privacy & Storage
 
-More in [docs/security.md](docs/security.md).
+- **Local only.** No network calls, no uploads, no telemetry.
+- **Secrets stay out.** `.env` is never read. Only variable *names* come from `.env.example`.
+  `config show` masks literal secrets and URL passwords.
+- **Out of your repo.** Kestrel's data lives in `~/Library/Application Support/Kestrel` (macOS),
+  `$XDG_DATA_HOME/kestrel` (Linux), or `%LOCALAPPDATA%\Kestrel` (Windows). Override with `KESTREL_HOME`.
 
-## MCP setup
+Threat model and limits: [docs/security.md](docs/security.md).
 
-*Planned:* `kestrel mcp` will expose read-only tools (diagnosis, timeline, recent errors) to Claude Code and
-other MCP clients.
+---
 
-## Troubleshooting
+## Documentation
 
-- **`kestrel inspect` found nothing:** check `--max-depth` (default 3) and whether the directory is gitignored.
-  Warnings at the end of the output name any file Kestrel couldn't parse or chose not to read.
-- **`init` refuses to write:** Kestrel never overwrites an existing `kestrel.yaml` or `.kestrel.yaml`. When stdin
-  isn't a terminal, pass `--yes`, or use `--print` and redirect the output.
-- **Something else:** `kestrel doctor` checks the platform, data directory, and config.
+- **[Architecture](docs/architecture.md)**: package map, discovery pipeline, design rules, dependency choices.
+- **[Configuration Reference](docs/configuration.md)**: every field, default, and validation rule.
+- **[Security Model](docs/security.md)**: threat model, masking/redaction limits, exec policy.
+- **[Testing Guide](docs/testing.md)**: golden files, fixtures, adding a detector.
+- **[Plan](docs/PLAN.md)** and **[Progress](docs/PROGRESS.md)**: phased roadmap and what's verified so far.
 
-## Platform support
+---
 
-macOS (arm64, amd64) and Linux (arm64, amd64) are developed and tested in CI. Windows (amd64) cross-compiles;
-process supervision there (Job Objects) will be documented with its limits when it lands.
+## Testing & Verification
+
+```bash
+make check    # gofmt, vet, tests, race detector, build, cross-compiles (what CI runs)
+make lint     # staticcheck
+make golden   # regenerate golden files after an intentional output change, then review the diff
+```
+
+### Manual Smoke Test
+- [ ] **Build:** `make build`
+- [ ] **Inspect a fixture:** `./bin/kestrel inspect --project tests/fixtures/projects/compose-stack`.
+  *Verify:* 4 candidates, `api`/`web` merged with their Go/Node projects, every line cites a source.
+- [ ] **JSON:** `./bin/kestrel inspect --project tests/fixtures/projects/go-api --format json`.
+  *Verify:* valid JSON with `schema_version: 1`.
+- [ ] **Init never overwrites:** in a scratch copy of a fixture, run `kestrel init --yes` twice.
+  *Verify:* the second run exits `2` and the file is unchanged.
+- [ ] **Validation:** add a typo like `helth:` to the generated `kestrel.yaml`, then run `kestrel config validate`.
+  *Verify:* it points at the line and exits `2`.
+- [ ] **Doctor:** `./bin/kestrel doctor`. *Verify:* all checks pass or explain themselves.
+
+---
 
 ## Contributing
 
-`make check` runs everything CI runs (gofmt, vet, tests, race detector, cross-builds); `make lint` runs
-staticcheck. If you change output on purpose, regenerate the golden files with `make golden` and review the
-diff. See [docs/testing.md](docs/testing.md).
+To add a detector, start with [docs/architecture.md](docs/architecture.md#discovery) and
+[docs/testing.md](docs/testing.md). Each detector needs unit tests, and a fixture with reviewed goldens when it
+adds a new ecosystem. Run `make check` before opening a PR.
+
+---
 
 ## License
 

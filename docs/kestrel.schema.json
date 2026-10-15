@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/kestrel-cli/kestrel/docs/kestrel.schema.json",
+  "$id": "https://github.com/Aareevs/Kestrel-CLI/docs/kestrel.schema.json",
   "title": "kestrel.yaml",
   "description": "Configuration for Kestrel, the local-first debugging CLI. Optional: Kestrel works without it.",
   "type": "object",

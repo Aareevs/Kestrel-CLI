@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kestrel-cli/kestrel/internal/config"
-	"github.com/kestrel-cli/kestrel/internal/discovery"
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/internal/config"
+	"github.com/Aareevs/Kestrel-CLI/internal/discovery"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 // ErrNoConfig is returned when a command needs kestrel.yaml and there is none.

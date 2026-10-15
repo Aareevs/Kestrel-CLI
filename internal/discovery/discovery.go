@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 // Options bound a scan. Zero values take defaults.

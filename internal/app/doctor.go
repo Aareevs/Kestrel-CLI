@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/kestrel-cli/kestrel/internal/appdir"
-	"github.com/kestrel-cli/kestrel/internal/config"
-	"github.com/kestrel-cli/kestrel/pkg/api"
+	"github.com/Aareevs/Kestrel-CLI/internal/appdir"
+	"github.com/Aareevs/Kestrel-CLI/internal/config"
+	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
 // Doctor runs Kestrel's self-checks. It does not create directories; it only
