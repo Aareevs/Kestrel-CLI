@@ -40,6 +40,9 @@ type SuperviseOptions struct {
 	Sink collectors.Sink
 	// OnSession is called once the session ID is known, before anything starts.
 	OnSession func(sessionID string, services []string)
+	// Warn receives problems the user should see while the session runs
+	// (e.g. session storage unavailable).
+	Warn func(msg string)
 }
 
 // Outcome summarizes a finished session.
@@ -49,6 +52,12 @@ type Outcome struct {
 	Failed      bool // a process crashed or a service ended not ready
 	Services    []api.ServiceStatus
 	Dropped     int
+	// Recorded is true when the session was persisted. WriteErrors counts
+	// events that could not be fully stored (the record is then incomplete).
+	Recorded    bool
+	WriteErrors int
+	// Retention is set when closing the session removed older ones.
+	Retention *api.RetentionResult
 }
 
 // RunCommands is zero-config supervision: each command becomes a service, its
@@ -228,15 +237,33 @@ func (a *App) supervise(ctx context.Context, mode string, specs []process.Servic
 		sink = collectors.SinkFunc(func(api.Event) {})
 	}
 
+	warn := func(msg string) {
+		if o.Warn != nil {
+			o.Warn(msg)
+		}
+	}
+	rec, closeStore := a.openRecorder(stamper.SessionID, mode, names, warn)
+	emit := sink
+	if rec != nil {
+		emit = collectors.SinkFunc(func(ev api.Event) {
+			rec.Emit(ev)
+			sink.Emit(ev)
+		})
+	}
+
 	state := newStateWriter(a.ProjectRoot, stamper.SessionID, mode, a.Now())
 	var sup *process.Supervisor
-	coll := collectors.New(stamper, collectors.SinkFunc(func(ev api.Event) { sup.Sink(sink).Emit(ev) }), collectors.Options{Redactor: red})
+	coll := collectors.New(stamper, collectors.SinkFunc(func(ev api.Event) { sup.Sink(emit).Emit(ev) }), collectors.Options{Redactor: red})
 	sup, err := process.NewSupervisor(specs, coll, process.Options{
 		StopGrace:    o.StopGrace,
 		ExitWhenDone: exitWhenDone,
 		OnChange:     func() { state.update(sup.Status()) },
 	})
 	if err != nil {
+		if rec != nil {
+			_ = rec.Close()
+			closeStore(api.SessionClosed, nil)
+		}
 		return nil, &UsageError{Err: err}
 	}
 	go coll.Run()
@@ -250,6 +277,14 @@ func (a *App) supervise(ctx context.Context, mode string, specs []process.Servic
 	_, _, dropped := coll.Stats()
 	out := &Outcome{SessionID: stamper.SessionID, Interrupted: ctx.Err() != nil, Services: final, Dropped: dropped}
 	out.Failed = sup.AnyFailed()
+	if rec != nil {
+		_ = rec.Close() // errors are counted on the session and surfaced below
+		out.Recorded, out.WriteErrors = true, rec.WriteErrors()
+		out.Retention = closeStore(api.SessionClosed, final)
+		if out.WriteErrors > 0 {
+			warn(fmt.Sprintf("%d event(s) could not be fully stored (%v); the saved session is incomplete", out.WriteErrors, rec.Err()))
+		}
+	}
 	return out, nil
 }
 

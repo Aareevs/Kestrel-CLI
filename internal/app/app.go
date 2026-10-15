@@ -48,6 +48,11 @@ func New(projectFlag, cwd string) (*App, error) {
 	} else {
 		root, _ = config.FindProjectRoot(cwd)
 	}
+	// Sessions are keyed by project root, so one project must have exactly one
+	// spelling: resolve symlinks (e.g. /var vs /private/var on macOS).
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
+	}
 	return &App{ProjectRoot: root, Getenv: os.Getenv, LookupEnv: os.LookupEnv, Now: time.Now}, nil
 }
 
