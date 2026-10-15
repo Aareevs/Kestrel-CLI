@@ -99,3 +99,51 @@ func TestInstallScript(t *testing.T) {
 		t.Fatalf("missing version: exit %d\n%s", code, out)
 	}
 }
+
+// The Homebrew formula is rendered from a release's checksums.txt: every
+// platform's URL and checksum come from it, and a missing archive is an error.
+func TestHomebrewFormula(t *testing.T) {
+	root, _ := filepath.Abs("../..")
+	script := filepath.Join(root, "scripts", "homebrew-formula.sh")
+	dir := t.TempDir()
+	sums := filepath.Join(dir, "checksums.txt")
+	var lines []string
+	want := map[string]string{}
+	for i, p := range []string{"darwin_arm64", "darwin_amd64", "linux_arm64", "linux_amd64"} {
+		sum := strings.Repeat(fmt.Sprintf("%x", i+1), 64)
+		name := "kestrel_1.2.3_" + p + ".tar.gz"
+		lines = append(lines, sum+"  "+name)
+		want[name] = sum
+	}
+	os.WriteFile(sums, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+
+	out, err := exec.Command("sh", script, "v1.2.3", sums).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := string(out)
+	for name, sum := range want {
+		url := "https://github.com/Aareevs/Kestrel-CLI/releases/download/v1.2.3/" + name
+		i := strings.Index(f, url)
+		if i < 0 || !strings.Contains(f[i:], `sha256 "`+sum+`"`) || strings.Index(f[i:], sum) > 200 {
+			t.Errorf("%s: URL or its checksum missing\n%s", name, f)
+		}
+	}
+	if !strings.Contains(f, "class Kestrel < Formula") || !strings.Contains(f, `version "1.2.3"`) || !strings.Contains(f, `bin.install "kestrel"`) {
+		t.Fatalf("formula:\n%s", f)
+	}
+	if ruby, err := exec.LookPath("ruby"); err == nil {
+		rb := filepath.Join(dir, "kestrel.rb")
+		os.WriteFile(rb, out, 0o644)
+		if o, err := exec.Command(ruby, "-c", rb).CombinedOutput(); err != nil {
+			t.Fatalf("not valid Ruby: %s", o)
+		}
+	}
+
+	// An archive missing from checksums.txt fails instead of producing a
+	// formula with an empty checksum.
+	os.WriteFile(sums, []byte(strings.Join(lines[:3], "\n")+"\n"), 0o644)
+	if err := exec.Command("sh", script, "v1.2.3", sums).Run(); err == nil {
+		t.Fatal("a missing archive must fail")
+	}
+}
