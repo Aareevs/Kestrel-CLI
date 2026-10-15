@@ -5,6 +5,7 @@ package process
 import (
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -32,6 +33,14 @@ func readPIDs(t *testing.T, path string, want int) []int {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+// running reports whether pid is a live process, not a zombie: an unreaped
+// dead child still answers kill(pid, 0), so that alone proves nothing.
+func running(pid int) bool {
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	st := strings.TrimSpace(string(out))
+	return err == nil && st != "" && !strings.HasPrefix(st, "Z")
 }
 
 func assertAllGone(t *testing.T, pids []int) {

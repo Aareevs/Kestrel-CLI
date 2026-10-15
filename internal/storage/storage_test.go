@@ -178,6 +178,44 @@ func TestFailedMigrationRollsBack(t *testing.T) {
 	}
 }
 
+// Several processes opening a brand-new database at once (watch in one
+// terminal, status in another) must all succeed: exactly one applies each
+// migration. Each Open has its own connection pool, as separate processes do.
+func TestConcurrentFirstOpen(t *testing.T) {
+	for round := 0; round < 5; round++ {
+		dir := t.TempDir()
+		const n = 8
+		errs := make(chan error, n)
+		start := make(chan struct{})
+		for i := 0; i < n; i++ {
+			go func() {
+				<-start
+				s, err := Open(ctx, dir, Options{})
+				if err == nil {
+					s.Close()
+				}
+				errs <- err
+			}()
+		}
+		close(start)
+		for i := 0; i < n; i++ {
+			if err := <-errs; err != nil {
+				t.Fatalf("round %d: concurrent open failed: %v", round, err)
+			}
+		}
+		s, err := Open(ctx, dir, Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var rows int
+		s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&rows)
+		if v, _ := s.SchemaVersion(ctx); v != latest() || rows != len(builtinMigrations()) {
+			t.Fatalf("version %d with %d migration rows", v, rows)
+		}
+		s.Close()
+	}
+}
+
 func TestNewerDatabaseIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	future := append(builtinMigrations(), Migration{Version: latest() + 1, Name: "future", SQL: `CREATE TABLE future (x INTEGER);`})
@@ -424,6 +462,49 @@ func TestDeleteSession(t *testing.T) {
 	s.CreateSession(ctx, NewSession{ID: act, Mode: "watch", ProjectRoot: "/proj", PID: os.Getpid(), StartedAt: clk.now()})
 	if _, err := s.DeleteSession(ctx, act); err == nil || !strings.Contains(err.Error(), "active") {
 		t.Fatalf("deleting an active session: %v", err)
+	}
+}
+
+func TestVerificationsAreKeptWithTheirSession(t *testing.T) {
+	clk := newClock()
+	s, _ := openStore(t, Options{Now: clk.now})
+	id := ulid(8)
+	record(t, s, id, clk.now(), events(id, clk.now(), 3, func(i int) string { return "x" }))
+	sum, _, err := s.GetSession(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, v := range []api.Verdict{api.VerdictStillFailing, api.VerdictResolved} {
+		start := clk.now().Add(time.Duration(i) * time.Minute)
+		rep := &api.VerificationReport{ID: fmt.Sprintf("01TESTVERIFY%014d", i), Session: &sum, Incident: &api.Incident{Number: 2},
+			StartedAt: start, EndedAt: start.Add(30 * time.Second), Window: "30s", Verdict: v, Reasons: []string{"why"}}
+		if err := s.SaveVerification(ctx, rep); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SaveVerification(ctx, &api.VerificationReport{ID: "x"}); err == nil {
+		t.Fatal("a verification without a session must be refused")
+	}
+	vs, err := s.Verifications(ctx, id)
+	if err != nil || len(vs) != 2 || vs[1].Verdict != api.VerdictResolved || vs[1].Incident != 2 || vs[1].Window != "30s" ||
+		vs[1].EndedAt.Sub(vs[1].StartedAt) != 30*time.Second {
+		t.Fatalf("%v %+v", err, vs)
+	}
+	full, err := s.Verification(ctx, vs[1].ID)
+	if err != nil || full.Verdict != api.VerdictResolved || full.Reasons[0] != "why" || full.Session.ID != id {
+		t.Fatalf("%v %+v", err, full)
+	}
+	if _, err := s.Verification(ctx, "nope"); err == nil {
+		t.Fatal("missing verification")
+	}
+	// Deleting the session deletes its verifications.
+	if _, err := s.DeleteSession(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	s.db.QueryRow(`SELECT COUNT(*) FROM verifications`).Scan(&n)
+	if n != 0 {
+		t.Fatalf("%d verifications outlived their session", n)
 	}
 }
 

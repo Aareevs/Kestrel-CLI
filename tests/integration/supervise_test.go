@@ -202,6 +202,14 @@ func alive(pid int) bool {
 	return err == nil || err == syscall.EPERM
 }
 
+// running reports whether pid is a live process, not a zombie: an unreaped
+// dead child still answers kill(pid, 0), so that alone proves nothing.
+func running(pid int) bool {
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	st := strings.TrimSpace(string(out))
+	return err == nil && st != "" && !strings.HasPrefix(st, "Z")
+}
+
 // TestWatchCtrlCLeavesNoOrphans is the Phase 2 exit criterion: watch runs
 // three fakesvc services (with children, one ignoring SIGTERM), Ctrl-C stops
 // them, and no process they started is left running.
@@ -234,6 +242,13 @@ services:
 		evs.waitFor(t, svc+" ready", 20*time.Second, func(e api.Event) bool { return e.ServiceID == svc && e.Type == api.EventProbeReady })
 	}
 	pids := pidsFrom(t, pidfile, 6) // db + 2 children, api + 1 child, web
+	// All of them must be running before Ctrl-C, or "no orphans" below
+	// would prove nothing.
+	for _, pid := range pids {
+		if !running(pid) {
+			t.Fatalf("pid %d exited before shutdown; the orphan check would be vacuous", pid)
+		}
+	}
 
 	// While the session runs, `status` in another "terminal" sees it. The
 	// session refreshes its status file every 250ms, so poll briefly.

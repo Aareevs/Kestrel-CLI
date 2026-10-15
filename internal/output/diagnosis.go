@@ -231,6 +231,7 @@ func Timeline(w io.Writer, r *api.TimelineReport, o TextOptions) {
 		incidentHeader(w, in, o)
 		timelineRows(w, in.Timeline, true, true, o)
 	}
+	verificationLines(w, r.Verifications, o)
 	if len(r.Graph) > 0 && !o.Quiet {
 		var parts []string
 		for _, e := range r.Graph {

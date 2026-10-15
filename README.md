@@ -39,8 +39,8 @@ hypotheses backed by the exact events that support them, and verifies whether yo
 needs no config to start, never uploads anything, and never runs a command you didn't ask for.
 
 > [!NOTE]
-> **Kestrel is in early development.** Discovery, supervision, session recording, incident timelines, and
-> evidence-backed diagnosis work today. Fix verification and the MCP server ship next. Anything not yet built is
+> **Kestrel is in early development.** Discovery, supervision, session recording, incident timelines,
+> evidence-backed diagnosis, and fix verification work today. The MCP server ships next. Anything not yet built is
 > marked **planned** below. Every output in this README comes from a real run.
 
 ---
@@ -79,6 +79,9 @@ kestrel run -- npm run dev
 
 # 3. When something breaks: what failed first, why Kestrel thinks so, and what to check next
 kestrel diagnose
+
+# 4. After your fix: is it actually fixed? Every check must hold for a 30s window, not just one probe
+kestrel verify
 ```
 
 With a `kestrel.yaml` (`kestrel init` writes one), `kestrel watch` supervises the whole stack in dependency order.
@@ -97,7 +100,7 @@ With a `kestrel.yaml` (`kestrel init` writes one), `kestrel watch` supervises th
 | `kestrel status` | Liveness vs. readiness per service, for a live session or straight from `kestrel.yaml` | ✅ |
 | `kestrel timeline` | Incident timeline: last healthy state → first anomaly → downstream symptoms → recovery | ✅ |
 | `kestrel diagnose` | Ranked, evidence-backed hypotheses with a concrete next step | ✅ |
-| `kestrel verify` | Post-fix checks over a stability window | planned |
+| `kestrel verify` | Did the fix work? Checks held across a stability window, plus before/after evidence; runs your test command only if you allow it | ✅ |
 | `kestrel sessions list\|show\|export\|delete` | Browse recorded sessions; export a redacted JSON bundle | ✅ |
 | `kestrel cleanup [--dry-run]` | Apply retention now (`retention_days`, `max_total_mb`) | ✅ |
 | `kestrel mcp` | Read-only MCP server for AI agents | planned |
@@ -111,7 +114,8 @@ With a `kestrel.yaml` (`kestrel init` writes one), `kestrel watch` supervises th
 - `--no-color`: plain output (`NO_COLOR` and non-TTY output are detected automatically).
 
 **Exit codes:** `0` ok · `1` failure detected / verification failed · `2` invalid usage or config ·
-`3` inconclusive investigation (e.g. `diagnose` can't single out a cause) · `4` internal error.
+`3` inconclusive investigation (e.g. `diagnose` can't single out a cause, or `verify` couldn't check anything) ·
+`4` internal error.
 
 ---
 
@@ -186,6 +190,68 @@ Incident #1  ·  3 services affected  ·  started 16:13:57  ·  correlation stro
 ```
 
 The full rule list, with what each needs as evidence, is in [docs/diagnosis-rules.md](docs/diagnosis-rules.md).
+
+### Verification: did the fix work?
+
+An API that fails its health check. `kestrel verify` runs while `kestrel watch` is still recording, so besides
+probing, it compares the session's new events with the incident's. The command check is a stand-in for your
+test suite (`go test ./...`, `npm test`). This is real, unedited output. Before the fix, from a script (no
+terminal, so the command is not run):
+
+```text
+$ kestrel verify --window 10s
+Session 01M4ZN0HSHDN9RQ18QA2QMV1DJ · watch · active · 16:56:28–running · api
+
+Incident #1  ·  1 service affected  ·  started 16:56:31  ·  correlation strong
+  Initiating failure: api (evt …4BBQD3)
+
+  Before: what was failing
+    ✗ api: api never became ready                               evt …4BBQD3
+
+  Checks (every 2s across a 10s window)
+    ✓ api  liveness process
+         6/6 samples passed · the running session
+    ✗ api  probe http://127.0.0.1:18080/health
+         0/6 samples passed · last failure: status 503 (want 200-399) · its health probe
+    -      command echo 'ok  example.com/api  0.41s' (in .)
+         skipped: not authorized: pass --allow-exec to run it (no terminal to ask in) · verify.checks
+
+  During the window no new errors from the affected services
+
+Verdict: still_failing  [observed]
+  · failing: api (probe http://127.0.0.1:18080/health)
+  · not run: command `echo 'ok  example.com/api  0.41s'`
+```
+
+After the fix (exit code 0, after the full default 30s window):
+
+```text
+$ kestrel verify --allow-exec
+  Before: what was failing
+    ✗ api: api never became ready                               evt …4BBQD3
+
+  Recovery recorded
+    ✓ api: recovered: http http://127.0.0.1:18080/health (status 200 in 1ms)  evt …KC727H
+
+  Checks (every 2s across a 30s window)
+    ✓ api  liveness process
+         16/16 samples passed · the running session
+    ✓ api  probe http://127.0.0.1:18080/health
+         16/16 samples passed · its health probe
+    ✓      command echo 'ok  example.com/api  0.41s' (in .)
+         passed · exit code 0 · 0.0s · verify.checks
+
+  During the window no new errors from the affected services
+
+Verdict: resolved  [verified]
+  · passing on every sample: api (probe http://127.0.0.1:18080/health), command `echo 'ok  example.com/api  0.41s'`
+  · no new errors from the affected services during the window
+```
+
+(The session and incident header lines are the same as above and are left out here.) A fix that lands halfway
+through the window, or a relapse during it, is never `resolved`. In a terminal, verify shows you each command, its
+directory, and its timeout, and runs it only if you answer `y`. Verdicts and checks:
+[docs/verification.md](docs/verification.md).
 
 ### Supervision
 
@@ -348,7 +414,7 @@ Setup will look like `claude mcp add kestrel -- kestrel mcp`. It won't work unti
 | **Ordered incident timeline across services** | ✓ | — | Partial (interleaved) | — |
 | **Names the failure that came first, with evidence** | ✓ | — | — | — (guesses) |
 | **Says "unresolved" instead of guessing** | ✓ | n/a | n/a | — |
-| **Verifies the fix over a stability window** | planned | — | — | — |
+| **Verifies the fix over a stability window** | ✓ | — | — | — |
 
 ---
 
@@ -384,9 +450,9 @@ especially, fall back to framework defaults.
 
 ```text
  discover ──▶ collect ──▶ normalize ──▶ record ──▶ correlate ──▶ diagnose ──▶ verify
- ✅ files      ✅ output,    ✅ typed,      ✅ SQLite    ✅ incidents  ✅ ranked     planned
-               probes,       redacted,      + log        dep graph,    evidence,    (stability
-               lifecycle     classified     segments     timeline      next step    window)
+ ✅ files      ✅ output,    ✅ typed,      ✅ SQLite    ✅ incidents  ✅ ranked     ✅ stability
+               probes,       redacted,      + log        dep graph,    evidence,    window,
+               lifecycle     classified     segments     timeline      next step    before/after
 ```
 
 - **Discover** reads, never runs, your project files to work out what the services are.
@@ -401,6 +467,9 @@ especially, fall back to framework defaults.
 - **Diagnose** runs [rules](docs/diagnosis-rules.md) that each propose hypotheses with supporting and
   contradicting events, a confidence level with its reasons, and one next step. Observed facts, correlations, and
   hypotheses are always labeled as such.
+- **Verify** re-checks the affected services across a stability window (every sample must pass), re-tries the
+  addresses that refused connections, compares a live session's new events with the incident's, and runs your
+  test command only with `--allow-exec` or your explicit `y`. It never restarts anything.
 - **Record** stores each session in a local SQLite database, with the full redacted text in append-only,
   gzipped log segments, and enforces retention. Nothing is stored that wasn't redacted first.
 
@@ -423,6 +492,9 @@ services:
     env: { DATABASE_URL: "${DATABASE_URL}" }   # resolved from your shell; never stored or shown
     depends_on: [database]
     health: { type: http, url: http://localhost:8080/health }
+verify:
+  checks:
+    - { type: command, run: go test ./..., dir: ./backend, timeout: 120s }   # runs only if you allow it
 ```
 
 Validation is strict: unknown keys are errors, every problem comes with a line number, typos get "did you
@@ -437,8 +509,9 @@ Full reference: [docs/configuration.md](docs/configuration.md).
 - **Secrets stay out.** `.env` is never read. Only variable *names* come from `.env.example`. Every line of
   process output is [redacted](docs/security.md) (keys, tokens, JWTs, URL credentials, auth headers, secret
   `key=value` pairs) before it's printed. `config show` masks literal secrets.
-- **Nothing you didn't ask for.** Kestrel only signals processes it started. Log text is data: it's never
-  executed, and terminal escape sequences are stripped.
+- **Nothing you didn't ask for.** Kestrel only signals processes it started. `verify` runs a configured command
+  only with `--allow-exec` or after you confirm it. Log text is data: it's never executed, and terminal escape
+  sequences are stripped.
 - **Out of your repo.** Kestrel's data lives in `~/Library/Application Support/Kestrel` (macOS),
   `$XDG_DATA_HOME/kestrel` (Linux), or `%LOCALAPPDATA%\Kestrel` (Windows). Override with `KESTREL_HOME`.
   Sessions are kept 7 days / 500 MB by default, and `kestrel sessions delete` removes one immediately.
@@ -452,6 +525,7 @@ Threat model and limits: [docs/security.md](docs/security.md).
 - **[Architecture](docs/architecture.md)**: package map, discovery and supervision pipelines, design rules.
 - **[Events](docs/events.md)**: event schema, types, severity, backpressure, and the pattern library.
 - **[Diagnosis Rules](docs/diagnosis-rules.md)**: how incidents form, how hypotheses are ranked, every rule.
+- **[Verification](docs/verification.md)**: checks, the stability window, before/after, verdicts, exec policy.
 - **[Configuration Reference](docs/configuration.md)**: every field, default, and validation rule.
 - **[Security Model](docs/security.md)**: threat model, masking/redaction limits, exec policy.
 - **[Testing Guide](docs/testing.md)**: golden files, fixtures, adding a detector.
@@ -486,6 +560,10 @@ make golden   # regenerate golden files after an intentional output change, then
   then `grep -c REDACTED /tmp/s.json`. *Verify:* the session is listed, secrets appear only as `[REDACTED:…]`.
 - [ ] **Diagnosis:** after a `watch` in which something failed, `./bin/kestrel diagnose` then `kestrel timeline`.
   *Verify:* the incident names what failed first, every ✓/✗ line has an `evt` ID, and the next step is a command.
+- [ ] **Verify:** with `watch` running on a failing service, `./bin/kestrel verify --window 10s < /dev/null`.
+  *Verify:* `still_failing`, exit 1, and the command check is skipped. Fix the service, run `kestrel verify` in a
+  terminal, and answer `n`, then `y`, at the prompt. *Verify:* the command runs only after `y`, and the verdict is
+  `resolved` only after the full window.
 - [ ] **Retention:** `./bin/kestrel cleanup --dry-run`. *Verify:* it explains what it keeps and why.
 - [ ] **Status:** while `watch` runs, run `kestrel status` in a second terminal. *Verify:* it shows liveness and
   readiness live.

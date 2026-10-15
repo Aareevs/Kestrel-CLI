@@ -38,7 +38,7 @@ only from events, so every claim they make can cite the IDs of the events behind
 | `probe_recovered` | Probe passes again after `probe_failed`. |
 | `startup_timeout` | Probe never passed: `retries` failures after `startup_grace`. |
 | `collector_overload` | Debug/info lines were dropped under load. `attrs.dropped` counts them. |
-| `restart`, `verification_result` | Reserved for later phases. |
+| `restart`, `verification_result` | Reserved. `kestrel verify` runs as its own process and stores its results as reports kept with the session (see [verification.md](verification.md)), not as events: only the recording process assigns a session's `seq`. |
 
 ## Severity
 

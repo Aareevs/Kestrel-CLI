@@ -18,7 +18,7 @@ we are executing it, the decisions made along the way, and the risks we are watc
 | 2 | Supervision: process groups, collectors, backpressure, probes, `run`, `watch`, `status`; `tests/fakesvc` | 3 fakesvc under `watch`, Ctrl-C → zero children (tested); 50 MB/min flood → bounded RSS (measured) | done (see PROGRESS.md) |
 | 3 | Persistence: SQLite, migrations, log segments, sessions, retention, `cleanup`, `sessions` | A session is persisted, listed, shown, exported (redacted), and deleted; retention test passes | done (see PROGRESS.md) |
 | 4 | Correlation + diagnosis: graph, incidents, timeline, rule engine, `timeline`, `diagnose` | Scenarios A, B, C, D, I golden; every hypothesis has evidence IDs | done (see PROGRESS.md) |
-| 5 | Verification: `verify`, stability window, authorized exec, before/after | Scenario E; exec refused without authorization (tested) | planned |
+| 5 | Verification: `verify`, stability window, authorized exec, before/after | Scenario E; exec refused without authorization (tested) | done (see PROGRESS.md) |
 | 6 | MCP server (read-only, reuses `internal/app`) | test client retrieves real diagnosis; redaction verified | planned |
 | 7 | Hardening + release: Scenarios F, G, H, J; GoReleaser; install script; tap; final README | `goreleaser release --snapshot --clean` succeeds | planned |
 
@@ -92,10 +92,29 @@ we are executing it, the decisions made along the way, and the risks we are watc
   processes.
 - **Scenario goldens come from real runs**, normalized, and are stopped by events rather than sleeps.
 
+## Phase 5 decisions
+
+- **The window always runs to the end.** A check passes only if every sample did. A fix that lands mid-window, or
+  a relapse, makes the check `flaky`, and the verdict is not `resolved`.
+- **Checks come from evidence**: the affected services' probes, the exact addresses that refused connections,
+  liveness from a live session, plus `verify.checks`. Nothing is probed because it merely might be relevant.
+- **Before/after needs a live session.** Verify reads the running session's new events (read-only, WAL). It does
+  not write events into a session it doesn't own, because only the recording process assigns `seq`. Reports are
+  stored in their own table and listed by `timeline`.
+- **Verify never acts on services.** It doesn't start, restart, or signal them. The only thing it runs is a
+  configured command, and only with `--allow-exec` or a `y` at a prompt showing command, directory, and timeout.
+  Authorization is decided in the CLI and passed down as a value: `internal/verification` can't run a command
+  without one.
+- **Liveness alone isn't progress.** A process that is up but failing its probe is `still_failing`, not partially
+  fixed. And "no new errors" with nothing to probe is `inconclusive`.
+
 ## Risks
 
 - Discovery heuristics are inherently partial; mitigated by explicit per-finding confidence and sources, and
   by never pretending a guess is a fact.
 - The hand-written `.gitignore` matcher does not implement every corner of git's semantics (documented).
 - Go 1.26 vs. staticcheck release compatibility; CI pins a version and we record what actually ran.
-- Windows Job Objects (Phase 2) cannot be exercised on this macOS machine; only cross-compiled.
+- Windows Job Objects (Phase 2) cannot be exercised on this macOS machine; only cross-compiled. The same goes for
+  `verify` command checks on Windows (`cmd.exe /C`, Job Object stop on timeout).
+- Timing-sensitive integration tests. Mitigated by waiting on events and on stored state rather than sleeping, by
+  ordering scenarios causally, and by repeated runs under CPU load at every phase gate.

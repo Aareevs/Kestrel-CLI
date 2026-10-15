@@ -46,7 +46,8 @@ fakesvc --exit-after 2s --exit-code 1 --exit-message "FATAL: …"
 fakesvc --flood-bytes-per-min 52428800            # 50 MB/min of info lines
 fakesvc --children 2 --ignore-term --pidfile p    # process tree that resists SIGTERM
 fakesvc --secrets / --hostile                     # redaction and inert-data checks
-fakesvc --recover-file f                          # /health returns 503 until f exists
+fakesvc --recover-file f                          # /health returns 503 until f exists (and again if f is removed)
+fakesvc --sleep                                    # do nothing, forever (used by --children)
 ```
 
 ## Supervision tests
@@ -54,7 +55,9 @@ fakesvc --recover-file f                          # /health returns 503 until f 
 - `internal/process`: process groups (grandchildren, SIGKILL escalation, exit classification) and the
   supervisor (dependency order, readiness waits, crashes, auto-probe, external services, no orphans).
 - `tests/integration/supervise_test.go` drives the real `kestrel` binary. It sends a terminal-style Ctrl-C
-  (SIGINT to Kestrel's process group) and checks that every PID the services recorded is gone. The flood test
+  (SIGINT to Kestrel's process group) and checks that every PID the services recorded is gone. Both orphan tests
+  first assert that every recorded PID is really running (via `ps`, since a zombie still answers `kill(pid, 0)`),
+  so "no orphans" can't pass vacuously. The flood test
   samples RSS for 10s by default:
 
   ```sh
@@ -96,7 +99,23 @@ leads, its confidence, the status, the exit code), and checks that every cited e
 | I ambiguous simultaneous failures | unresolved, competing hypotheses, exit 3 |
 
 `fakesvc` is symlinked, not copied, into each scenario project: macOS scans every fresh binary on first exec, which
-made parallel runs flaky. Scenarios still to come: E with verification (Phase 5), and F–H and J in hardening
-(Phase 7). Phases 2–3 already cover parts of F
+made parallel runs flaky.
+
+**Scenario E (recovery)** is `TestScenarioERecovery` in `verify_test.go`. Under a real `kestrel watch`, an api
+fails its startup probe, then the test:
+
+1. verifies while it's broken (`still_failing`, exit 1, compared live);
+2. fixes it a third of the way into a window (the probe is `flaky`, and the verdict is not `resolved`);
+3. waits for the recorded `probe_recovered` event;
+4. verifies across a 2s window (`resolved`, exit 0, 9/9 samples, not before 2s have passed, recovery evidence is
+   that exact event);
+5. breaks it again mid-window (not `resolved`; the relapse is cited from the live session);
+6. checks that every cited event exists in the session, and that `timeline` lists all four verifications.
+
+The exec policy is tested from both sides: with no terminal and no flag, a command that would create a file
+doesn't run (the test was checked against a deliberately broken authorizer, and it catches it); with `--allow-exec`,
+or a `y` at the prompt, it does.
+
+Scenarios still to come: F–H and J in hardening (Phase 7). Phases 2–3 already cover parts of F
 (redaction in terminal and JSON output, the database, WAL, segments, and export), G (interrupt, no orphans,
 storage flushed), H (bounded memory, overload events, retention) and J (hostile lines are inert).

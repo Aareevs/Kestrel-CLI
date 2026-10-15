@@ -116,11 +116,42 @@ func Open(ctx context.Context, dir string, opts Options) (*Store, error) {
 	}
 	db.SetMaxOpenConns(4)
 	s := &Store{dir: dir, db: db, opts: opts}
+	if err := s.connect(ctx); err != nil {
+		db.Close()
+		return nil, classify(err)
+	}
 	if err := s.migrate(ctx); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return s, nil
+}
+
+// connectRetry bounds how long Open retries a busy first connection.
+const connectRetry = 5 * time.Second
+
+// connect opens the first connection. On a brand-new database that
+// connection switches the file to WAL, and SQLite answers SQLITE_BUSY at once,
+// without waiting on busy_timeout, to another process connecting during that
+// switch (watch and status started together on first use). It happens once
+// per database, so a short retry is enough.
+func (s *Store) connect(ctx context.Context) error {
+	deadline := time.Now().Add(connectRetry)
+	for {
+		err := s.db.PingContext(ctx)
+		if err == nil || !isBusy(err) || time.Now().After(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+}
+
+func isBusy(err error) bool {
+	return strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked")
 }
 
 // Close releases the database.
@@ -184,20 +215,40 @@ func (s *Store) migrate(ctx context.Context) error {
 
 // apply runs one migration and records it atomically: either both happen or
 // neither does. SQLite supports transactional DDL.
-func (s *Store) apply(ctx context.Context, m Migration) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+//
+// Several Kestrel processes can open a fresh database at once (watch in one
+// terminal, status or verify in another). The write lock is taken up front
+// (BEGIN IMMEDIATE; others wait on busy_timeout), and the migration is
+// re-checked under it, so exactly one process applies it and the rest skip.
+func (s *Store) apply(ctx context.Context, m Migration) (err error) {
+	conn, err := s.db.Conn(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, m.SQL); err != nil {
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version, name, applied_ns) VALUES (?, ?, ?)`,
-		m.Version, m.Name, s.opts.Now().UnixNano()); err != nil {
+	defer func() {
+		if err != nil {
+			_, _ = conn.ExecContext(context.WithoutCancel(ctx), `ROLLBACK`)
+		}
+	}()
+	var done int
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, m.Version).Scan(&done); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if done == 0 {
+		if _, err := conn.ExecContext(ctx, m.SQL); err != nil {
+			return err
+		}
+		if _, err := conn.ExecContext(ctx, `INSERT INTO schema_migrations (version, name, applied_ns) VALUES (?, ?, ?)`,
+			m.Version, m.Name, s.opts.Now().UnixNano()); err != nil {
+			return err
+		}
+	}
+	_, err = conn.ExecContext(ctx, `COMMIT`)
+	return err
 }
 
 // SchemaVersion returns the highest applied migration.

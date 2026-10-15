@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+
+	"github.com/mattn/go-isatty"
 )
 
 // Format is an output format selected by --format.
@@ -25,14 +27,14 @@ func ColorEnabled(w io.Writer, noColorFlag bool, getenv func(string) string) boo
 	return IsTerminal(w)
 }
 
-// IsTerminal reports whether v is a character device such as a TTY.
+// IsTerminal reports whether v is an interactive terminal. A character device
+// is not enough: /dev/null is one, and a prompt must never read from it.
 func IsTerminal(v any) bool {
 	f, ok := v.(*os.File)
 	if !ok {
 		return false
 	}
-	fi, err := f.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+	return isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd())
 }
 
 // Style applies ANSI styles when enabled.

@@ -95,7 +95,12 @@ run yourself) is observed and never started.
 |---|---|
 | `type` | `probe` (re-run a service's health probe) or `command`. |
 | `service` | probe: a service that has a `health` probe. |
-| `run`, `dir`, `timeout` (default `120s`) | command: executed only with `--allow-exec` or interactive confirmation (from Phase 5). |
+| `run` | command: a shell line, run only with `--allow-exec` or after you confirm it at a prompt (see [verification](verification.md#commands)). |
+| `dir` | command: working directory, relative to the project root. Must exist. Default: the project root. |
+| `timeout` | command: default `120s`. The command's whole process group is stopped when it runs over. |
+
+Probe checks are added to the ones verify picks by itself (the health probe of each affected service, and each
+address the incident's services failed to reach). See [verification.md](verification.md).
 
 ## Secrets
 

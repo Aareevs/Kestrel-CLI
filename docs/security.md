@@ -24,12 +24,21 @@ promises, and where the current build stops.
 | A corrupt or newer database is "fixed" destructively | It never is. Corruption is reported (`doctor`, warnings) and the file is left byte-for-byte untouched, so you can inspect or move it. Supervision keeps working without storage. |
 | Stored paths escape the data directory | Segment paths read from the database are validated before use; `..` and absolute paths are refused. |
 | Exports overwrite files or leak via permissions | `--out` creates the file `0600`, refuses to overwrite, and removes a half-written bundle on failure. The data directory and files are created `0700`/`0600`. |
+| `verify` runs a command you didn't approve | Commands run only with `--allow-exec` or an explicit `y` at a prompt showing the command, directory, and timeout. No terminal means no prompt and no exec. See [Exec policy](#exec-policy-verify). |
 | History grows without bound | Retention (default 7 days / 500 MB) runs when each session ends and via `kestrel cleanup`. Active sessions are never removed. |
 
-## Not yet in place
+## Exec policy (`verify`)
 
-- **Exec policy for `verify`** (`--allow-exec`, confirmation showing command, directory, and timeout) arrives
-  in Phase 5.
+`kestrel verify` runs a `command` check from `verify.checks` only with `--allow-exec`, or after showing the exact
+command (secrets masked), the directory, and the timeout in a terminal and getting an explicit `y`. Without a
+terminal there is no prompt and nothing runs. An empty or any other answer declines. Each command runs in its own
+process group, is stopped (the whole group) at its timeout or on Ctrl-C, and only a redacted 20-line tail of its
+output is kept. Verify never starts, restarts, or signals services, and never builds a command from log content.
+Tests: `TestVerifyRefusesExecWithoutAuthorization`, `TestVerifyPromptInProcess`. Details:
+[verification.md](verification.md#commands).
+
+Terminal detection uses a real TTY check: `/dev/null` is a character device, but it is not a terminal and is
+never prompted.
 
 ## Limits
 
