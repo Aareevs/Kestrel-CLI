@@ -230,8 +230,29 @@ func (n normalizer) apply(s string) string {
 	s = timesRe.ReplaceAllString(s, "N time(s)")
 	s = durationRe.ReplaceAllString(s, "<dur>")
 	s = evtPadRe.ReplaceAllString(s, "  evt ")
-	s = regexp.MustCompile(`connectex: No connection could be made because the target machine actively refused it\.?`).ReplaceAllString(s, "connect: connection refused")
 	return s
+}
+
+var (
+	// The OS's "connection refused" text, from the colon to the end of the
+	// line. Kestrel truncates long lines, and the Windows wording is much
+	// longer, so the rest of such a line can't be compared across platforms.
+	refusedTailRe = regexp.MustCompile(`: connect(?:ex)?: .*$`)
+	// The port-owner command Kestrel suggests differs by platform.
+	portOwnerRe = regexp.MustCompile(`\$ (?:lsof -nP -iTCP:(\S+) -sTCP:LISTEN|netstat -ano \| findstr :(\S+))`)
+)
+
+// platformCanon folds known Windows/Unix differences together. It is only
+// applied on Windows, to both the golden and the output, so the Unix goldens
+// stay byte-exact on Unix. The exact Windows command is asserted in the
+// scenario's check instead.
+func platformCanon(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = refusedTailRe.ReplaceAllString(l, ": <connection refused>")
+	}
+	s = strings.Join(lines, "\n")
+	return portOwnerRe.ReplaceAllString(s, "$$ <who holds port $1$2>")
 }
 
 // TestScenarios is the Phase 4 exit criterion: scenarios A, B, C, D and I,
@@ -300,10 +321,14 @@ func TestScenarios(t *testing.T) {
 			sc.check(t, rep)
 
 			n := normalizer{ports: ports}
+			var canon func(string) string
+			if runtime.GOOS == "windows" {
+				canon = platformCanon
+			}
 			_, text, _ := kestrelCmd(t, home, project, "diagnose", "--no-color")
-			golden(t, "scenarios/"+sc.name+".diagnose.txt", n.apply(text))
+			goldenWith(t, "scenarios/"+sc.name+".diagnose.txt", n.apply(text), canon)
 			_, tl, _ := kestrelCmd(t, home, project, "timeline", "--no-color")
-			golden(t, "scenarios/"+sc.name+".timeline.txt", n.apply(tl))
+			goldenWith(t, "scenarios/"+sc.name+".timeline.txt", n.apply(tl), canon)
 		})
 	}
 }

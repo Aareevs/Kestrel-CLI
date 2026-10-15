@@ -73,6 +73,14 @@ func normalize(s, root string) string {
 
 func golden(t *testing.T, name, got string) {
 	t.Helper()
+	goldenWith(t, name, got, nil)
+}
+
+// goldenWith compares got to the golden file after applying canon (if set)
+// to both sides. Goldens are always written raw, from the Unix output; canon
+// only folds known platform differences together when comparing.
+func goldenWith(t *testing.T, name, got string, canon func(string) string) {
+	t.Helper()
 	path := filepath.Join("testdata", name)
 	if *update {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -83,11 +91,15 @@ func golden(t *testing.T, name, got string) {
 		}
 		return
 	}
-	want, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("missing golden %s (run with -update): %v", path, err)
 	}
-	if string(want) != got {
+	want := string(raw)
+	if canon != nil {
+		want, got = canon(want), canon(got)
+	}
+	if want != got {
 		t.Errorf("%s mismatch\n--- want\n%s\n--- got\n%s", path, want, got)
 	}
 }
