@@ -35,14 +35,91 @@ type NewSession struct {
 	PID         int
 	StartedAt   time.Time
 	Services    []string
+	Topology    api.Topology
 }
 
 // CreateSession registers an active session.
 func (s *Store) CreateSession(ctx context.Context, n NewSession) error {
 	svc, _ := json.Marshal(n.Services)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO sessions (id, mode, project_root, status, kestrel_pid, started_ns, services)
-		VALUES (?, ?, ?, 'active', ?, ?, ?)`, n.ID, n.Mode, n.ProjectRoot, n.PID, n.StartedAt.UnixNano(), string(svc))
+	if n.Topology.Services == nil {
+		n.Topology.Services = []api.ServiceTopology{}
+	}
+	topo, _ := json.Marshal(n.Topology)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO sessions (id, mode, project_root, status, kestrel_pid, started_ns, services, topology)
+		VALUES (?, ?, ?, 'active', ?, ?, ?, ?)`, n.ID, n.Mode, n.ProjectRoot, n.PID, n.StartedAt.UnixNano(), string(svc), string(topo))
 	return err
+}
+
+// Topology returns the service layout a session ran with.
+func (s *Store) Topology(ctx context.Context, id string) (api.Topology, error) {
+	var raw string
+	var t api.Topology
+	if err := s.db.QueryRowContext(ctx, `SELECT topology FROM sessions WHERE id = ?`, id).Scan(&raw); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return t, fmt.Errorf("%w: %q", ErrNotFound, id)
+		}
+		return t, err
+	}
+	err := json.Unmarshal([]byte(raw), &t)
+	return t, err
+}
+
+// DiagnosticEvents returns the events diagnosis needs, in seq order: every
+// non-log event, every log line of warn or above, and info lines that
+// announced a listening port (they establish which service owns a port).
+// Plain info/debug chatter is left in storage.
+func (s *Store) DiagnosticEvents(ctx context.Context, sessionID string) ([]api.Event, error) {
+	return s.queryEvents(ctx, sessionID, `(type != 'log_line' OR severity IN ('warn','error','fatal') OR instr(attrs, '"L001-listening"') > 0)`, nil)
+}
+
+// TailBefore returns up to n events of one service that precede seq, oldest
+// first (the lines leading up to a crash).
+func (s *Store) TailBefore(ctx context.Context, sessionID, service string, seq uint64, n int) ([]api.Event, error) {
+	evs, err := s.queryEvents(ctx, sessionID, `service = ? AND seq < ?`, []any{service, seq}, "DESC", n)
+	if err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(evs)-1; i < j; i, j = i+1, j-1 {
+		evs[i], evs[j] = evs[j], evs[i]
+	}
+	return evs, nil
+}
+
+// queryEvents runs a filtered event query. extra may be: order ("ASC"/"DESC"), limit.
+func (s *Store) queryEvents(ctx context.Context, sessionID, where string, args []any, extra ...any) ([]api.Event, error) {
+	order, limit := "ASC", 0
+	if len(extra) > 0 {
+		order = extra[0].(string)
+	}
+	if len(extra) > 1 {
+		limit = extra[1].(int)
+	}
+	q := `SELECT seq, id, time_ns, service, pid, type, severity, source, message, attrs, fingerprint
+		FROM events WHERE session_id = ? AND ` + where + ` ORDER BY seq ` + order
+	if limit > 0 {
+		q += fmt.Sprintf(` LIMIT %d`, limit)
+	}
+	rows, err := s.db.QueryContext(ctx, q, append([]any{sessionID}, args...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []api.Event{}
+	for rows.Next() {
+		var (
+			e                    api.Event
+			t                    int64
+			attrs, typ, sev, src string
+		)
+		if err := rows.Scan(&e.Seq, &e.ID, &t, &e.ServiceID, &e.PID, &typ, &sev, &src, &e.Message, &attrs, &e.Fingerprint); err != nil {
+			return nil, err
+		}
+		e.SessionID, e.Time = sessionID, time.Unix(0, t).UTC()
+		e.Type, e.Severity, e.Source = api.EventType(typ), api.Severity(sev), api.EventSource(src)
+		_ = json.Unmarshal([]byte(attrs), &e.Attrs)
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 // FinishSession closes a session and records the final service states.

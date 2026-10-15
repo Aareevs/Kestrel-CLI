@@ -78,10 +78,13 @@ func events(id string, start time.Time, n int, msg func(i int) string) []api.Eve
 	return out
 }
 
+// latest is the newest built-in schema version.
+func latest() int { m := builtinMigrations(); return m[len(m)-1].Version }
+
 func TestMigrationsApplyOnceAndAreRecorded(t *testing.T) {
 	s, dir := openStore(t, Options{})
 	v, err := s.SchemaVersion(ctx)
-	if err != nil || v != 1 {
+	if err != nil || v != latest() {
 		t.Fatalf("version %d, %v", v, err)
 	}
 	for _, table := range []string{"sessions", "events", "segments", "schema_migrations"} {
@@ -111,20 +114,47 @@ func TestMigrationsApplyOnceAndAreRecorded(t *testing.T) {
 	defer s2.Close()
 	var n int
 	s2.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 1 {
+	if n != latest() {
 		t.Fatalf("schema_migrations rows = %d", n)
+	}
+}
+
+// An existing database from an older Kestrel is upgraded in place, keeping
+// its sessions.
+func TestUpgradeKeepsExistingData(t *testing.T) {
+	dir := t.TempDir()
+	v1, err := Open(ctx, dir, Options{Migrations: builtinMigrations()[:1]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := newClock()
+	if _, err := v1.db.Exec(`INSERT INTO sessions (id, mode, project_root, status, kestrel_pid, started_ns) VALUES ('OLD', 'run', '/p', 'closed', 1, ?)`, clk.now().UnixNano()); err != nil {
+		t.Fatal(err)
+	}
+	v1.Close()
+	s, err := Open(ctx, dir, Options{})
+	if err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+	defer s.Close()
+	if v, _ := s.SchemaVersion(ctx); v != latest() {
+		t.Fatalf("version after upgrade %d", v)
+	}
+	topo, err := s.Topology(ctx, "OLD")
+	if err != nil || topo.Services == nil || len(topo.Services) != 0 {
+		t.Fatalf("old session after upgrade: %+v %v", topo, err)
 	}
 }
 
 func TestFailedMigrationRollsBack(t *testing.T) {
 	dir := t.TempDir()
 	good := builtinMigrations()
-	bad := append(append([]Migration{}, good...), Migration{Version: 2, Name: "broken", SQL: `
+	bad := append(append([]Migration{}, good...), Migration{Version: latest() + 1, Name: "broken", SQL: `
 		CREATE TABLE half_done (x INTEGER);
 		INSERT INTO half_done VALUES (1);
 		THIS IS NOT SQL;`})
 	_, err := Open(ctx, dir, Options{Migrations: bad})
-	if err == nil || !strings.Contains(err.Error(), "migration 002_broken failed") || !strings.Contains(err.Error(), "left at version 1") {
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("migration %03d_broken failed", latest()+1)) || !strings.Contains(err.Error(), fmt.Sprintf("left at version %d", latest())) {
 		t.Fatalf("got %v", err)
 	}
 	// Reopen with only the good migrations: v1 is intact and nothing of v2 leaked.
@@ -138,7 +168,7 @@ func TestFailedMigrationRollsBack(t *testing.T) {
 	if n != 0 {
 		t.Fatal("a failed migration left its partial changes behind")
 	}
-	if v, _ := s.SchemaVersion(ctx); v != 1 {
+	if v, _ := s.SchemaVersion(ctx); v != latest() {
 		t.Fatalf("version %d", v)
 	}
 	// And the broken one is retried (not recorded as applied) when present again.
@@ -150,7 +180,7 @@ func TestFailedMigrationRollsBack(t *testing.T) {
 
 func TestNewerDatabaseIsRefused(t *testing.T) {
 	dir := t.TempDir()
-	future := append(builtinMigrations(), Migration{Version: 2, Name: "future", SQL: `CREATE TABLE future (x INTEGER);`})
+	future := append(builtinMigrations(), Migration{Version: latest() + 1, Name: "future", SQL: `CREATE TABLE future (x INTEGER);`})
 	s, err := Open(ctx, dir, Options{Migrations: future})
 	if err != nil {
 		t.Fatal(err)
@@ -613,7 +643,7 @@ func TestInspectHealthyAndMissing(t *testing.T) {
 	record(t, s, ulid(9), clk.now(), events(ulid(9), clk.now(), 5, func(int) string { return "m" }))
 	s.CreateSession(ctx, NewSession{ID: ulid(10), Mode: "run", ProjectRoot: "/p", PID: 1, StartedAt: clk.now()})
 	h := Inspect(ctx, d2)
-	if !h.Exists || h.Problem != nil || h.SchemaVersion != 1 || h.Sessions != 2 || h.Active != 1 {
+	if !h.Exists || h.Problem != nil || h.SchemaVersion != latest() || h.Sessions != 2 || h.Active != 1 {
 		t.Fatalf("healthy: %+v", h)
 	}
 }
