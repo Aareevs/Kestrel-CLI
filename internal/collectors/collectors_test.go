@@ -240,6 +240,16 @@ func TestCollectorFoldsRepeats(t *testing.T) {
 	if rec.evs[2].Type != api.EventDependencyConnFailed || rec.evs[2].Severity != api.SeverityError {
 		t.Fatalf("repeat summary must keep type/severity: %+v", rec.evs[2])
 	}
+	// Ground truth: 14 retry lines went in; the events must account for exactly 14.
+	retries := 0
+	for _, e := range rec.evs {
+		if strings.HasPrefix(e.Message, "retry ") {
+			retries += e.Lines()
+		}
+	}
+	if retries != 14 {
+		t.Fatalf("events account for %d retry lines, want 14", retries)
+	}
 }
 
 func TestCollectorFlushesIdleRepeats(t *testing.T) {

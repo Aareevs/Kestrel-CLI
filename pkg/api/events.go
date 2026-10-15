@@ -90,6 +90,16 @@ type Attrs struct {
 	Requested bool `json:"requested,omitempty"`
 }
 
+// Lines is how many lines of output an event stands for: a repeat summary
+// (Attrs.Repeats > 0) stands for exactly the Repeats identical lines that
+// followed its first occurrence and were folded; any other event is one.
+func (e Event) Lines() int {
+	if e.Attrs.Repeats > 0 {
+		return e.Attrs.Repeats
+	}
+	return 1
+}
+
 // Event is one observed fact. Seq is the authoritative order within a session.
 type Event struct {
 	ID          string      `json:"id"`

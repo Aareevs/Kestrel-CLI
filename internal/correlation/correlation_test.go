@@ -187,6 +187,22 @@ func TestFirstReadyAfterAConnectionErrorIsNotRecovery(t *testing.T) {
 	}
 }
 
+// A repeat summary arrives at the end of its run (after other events of the
+// same service); it must extend the run's entry, not appear as a late one.
+func TestRepeatSummaryMergesIntoItsRun(t *testing.T) {
+	s := newStream()
+	s.refused(0, "api", 5432)
+	s.at(500, "api", api.EventStartupTimeout, api.SeverityError, "never became ready", api.Attrs{})
+	s.at(3000, "api", api.EventDependencyConnFailed, api.SeverityError, "dial tcp 127.0.0.1:5432: connect: connection refused", api.Attrs{Port: 5432, Repeats: 28, DurationMS: 2900})
+	in := Correlate(s.evs, graph.Build(topo3, s.evs), 0)[0]
+	if got := roles(in); got != "api/first_anomaly/dependency_conn_failed×29 api/key/startup_timeout×1" {
+		t.Fatalf("timeline: %s", got)
+	}
+	if in.Timeline[0].Until.IsZero() {
+		t.Fatal("merged run should carry its end time")
+	}
+}
+
 func TestRecoveryAndRepeatSummaries(t *testing.T) {
 	s := newStream()
 	s.ready(0, "api")
@@ -196,7 +212,8 @@ func TestRecoveryAndRepeatSummaries(t *testing.T) {
 	s.at(4000, "api", api.EventProbeRecovered, api.SeverityInfo, "recovered", api.Attrs{})
 	in := Correlate(s.evs, graph.Build(topo3, s.evs), 0)[0]
 	got := roles(in)
-	want := "api/last_healthy/probe_ready×1 api/first_anomaly/probe_failed×1 api/key/dependency_conn_failed×11 api/recovery/probe_recovered×1"
+	// One printed refusal plus a summary standing for 9 folded repeats = 10 lines.
+	want := "api/last_healthy/probe_ready×1 api/first_anomaly/probe_failed×1 api/key/dependency_conn_failed×10 api/recovery/probe_recovered×1"
 	if got != want {
 		t.Fatalf("timeline:\n got  %s\n want %s", got, want)
 	}

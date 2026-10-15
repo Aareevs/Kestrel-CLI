@@ -109,12 +109,17 @@ func earliestRoot(c *rules.Context) string {
 	return best
 }
 
-// symptoms summarizes downstream-symptom timeline entries per service.
+// symptoms summarizes downstream-symptom timeline entries per service,
+// totalling each kind of symptom (a run split by other events counts once).
 func symptoms(tl []api.TimelineEntry) []api.Symptom {
+	type kind struct {
+		entry api.TimelineEntry
+		count int
+	}
 	type acc struct {
-		parts []string
+		kinds []*kind
+		byKey map[string]*kind
 		ids   []string
-		seen  map[string]bool
 	}
 	var order []string
 	by := map[string]*acc{}
@@ -124,29 +129,39 @@ func symptoms(tl []api.TimelineEntry) []api.Symptom {
 		}
 		a := by[e.Service]
 		if a == nil {
-			a = &acc{seen: map[string]bool{}}
+			a = &acc{byKey: map[string]*kind{}}
 			by[e.Service] = a
 			order = append(order, e.Service)
 		}
-		part := symptomText(e)
-		if !a.seen[part] {
-			a.seen[part] = true
-			a.parts = append(a.parts, part)
+		key := string(e.Type)
+		if e.Type == api.EventLogLine {
+			key += "|" + e.Message
 		}
+		k := a.byKey[key]
+		if k == nil {
+			k = &kind{entry: e}
+			a.byKey[key] = k
+			a.kinds = append(a.kinds, k)
+		}
+		k.count += e.Count
 		a.ids = append(a.ids, e.EventID)
 	}
 	out := []api.Symptom{}
 	for _, s := range order {
 		a := by[s]
-		out = append(out, api.Symptom{Service: s, Summary: strings.Join(a.parts, "; "), EventIDs: a.ids, Claim: api.ClaimCorrelated})
+		var parts []string
+		for _, k := range a.kinds {
+			parts = append(parts, symptomText(k.entry, k.count))
+		}
+		out = append(out, api.Symptom{Service: s, Summary: strings.Join(parts, "; "), EventIDs: a.ids, Claim: api.ClaimCorrelated})
 	}
 	return out
 }
 
-func symptomText(e api.TimelineEntry) string {
+func symptomText(e api.TimelineEntry, n int) string {
 	count := ""
-	if e.Count > 1 {
-		count = fmt.Sprintf(" ×%d", e.Count)
+	if n > 1 {
+		count = fmt.Sprintf(" ×%d", n)
 	}
 	switch e.Type {
 	case api.EventDependencyConnFailed:

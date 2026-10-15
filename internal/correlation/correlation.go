@@ -60,7 +60,10 @@ func (in *Incident) Members() []string {
 	return out
 }
 
-func (in *Incident) has(svc string) bool { _, ok := in.ByService[svc]; return ok }
+// Has reports whether svc is a member of the incident.
+func (in *Incident) Has(svc string) bool { _, ok := in.ByService[svc]; return ok }
+
+func (in *Incident) has(svc string) bool { return in.Has(svc) }
 
 func (in *Incident) add(e api.Event) {
 	in.Anomalies = append(in.Anomalies, e)
@@ -192,8 +195,7 @@ func (in *Incident) isRoot(svc string) bool {
 func (in *Incident) timeline(events []api.Event) []api.TimelineEntry {
 	var out []api.TimelineEntry
 	entry := func(e api.Event, role string, claim api.ClaimLevel) api.TimelineEntry {
-		n := 1 + e.Attrs.Repeats
-		te := api.TimelineEntry{EventID: e.ID, Seq: e.Seq, Time: e.Time, Count: n, Service: e.ServiceID,
+		te := api.TimelineEntry{EventID: e.ID, Seq: e.Seq, Time: e.Time, Count: e.Lines(), Service: e.ServiceID,
 			Type: e.Type, Severity: e.Severity, Message: e.Message, Role: role, Claim: claim}
 		if e.Attrs.Repeats > 0 {
 			te.Until = e.Time
@@ -222,6 +224,7 @@ func (in *Incident) timeline(events []api.Event) []api.TimelineEntry {
 	firstSeq := in.Anomalies[0].Seq
 	lastByService := map[string]int{} // index of the service's latest anomaly entry
 	lastFP := map[string]string{}     // and that entry's fingerprint
+	runOf := map[string]int{}         // service|type|fingerprint → entry, for repeat summaries
 	for _, e := range in.Anomalies {
 		role, claim := api.RoleKey, api.ClaimObserved
 		switch {
@@ -230,15 +233,24 @@ func (in *Incident) timeline(events []api.Event) []api.TimelineEntry {
 		case in.InitiatingKnown && !in.isRoot(e.ServiceID):
 			role, claim = api.RoleSymptom, api.ClaimCorrelated
 		}
+		key := e.ServiceID + "|" + string(e.Type) + "|" + e.Fingerprint
+		// A repeat summary continues the run its first line started, even if
+		// other events of the service came in between.
+		if i, ok := runOf[key]; ok && e.Attrs.Repeats > 0 && e.Fingerprint != "" {
+			out[i].Count += e.Lines()
+			out[i].Until = e.Time
+			continue
+		}
 		if i, ok := lastByService[e.ServiceID]; ok && role != api.RoleFirstAnomaly &&
 			out[i].Type == e.Type && e.Fingerprint != "" && lastFP[e.ServiceID] == e.Fingerprint {
 			// Same failure repeating: extend the previous entry.
-			out[i].Count += 1 + e.Attrs.Repeats
+			out[i].Count += e.Lines()
 			out[i].Until = e.Time
 			continue
 		}
 		out = append(out, entry(e, role, claim))
 		lastByService[e.ServiceID], lastFP[e.ServiceID] = len(out)-1, e.Fingerprint
+		runOf[key] = len(out) - 1
 	}
 
 	// Recovery: a member passing again after it was itself down. That is a

@@ -115,7 +115,7 @@ func shorten(s string, n int) string {
 }
 
 func evidence(e api.Event, summary string) api.Evidence {
-	n := 1 + e.Attrs.Repeats
+	n := e.Lines()
 	if n == 1 {
 		n = 0
 	}
@@ -133,7 +133,7 @@ func collapsed(evs []api.Event, summary func(api.Event) string) []api.Evidence {
 			if out[i].Count == 0 {
 				out[i].Count = 1
 			}
-			out[i].Count += 1 + e.Attrs.Repeats
+			out[i].Count += e.Lines()
 			continue
 		}
 		index[key] = len(out)
@@ -146,7 +146,7 @@ func collapsed(evs []api.Event, summary func(api.Event) string) []api.Evidence {
 func describe(e api.Event) string {
 	switch e.Type {
 	case api.EventProcessCrashed:
-		return fmt.Sprintf("%s %s", e.ServiceID, strings.TrimPrefix(e.Message, "crashed "))
+		return e.ServiceID + " " + exitDetail(e)
 	case api.EventProcessExited:
 		return e.ServiceID + " " + e.Message
 	case api.EventStartupTimeout:

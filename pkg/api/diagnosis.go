@@ -55,6 +55,7 @@ const (
 	RoleKey          = "key"
 	RoleSymptom      = "downstream_symptom"
 	RoleRecovery     = "recovery"
+	RoleOutput       = "output" // ordinary output, in a per-service timeline
 )
 
 // TimelineEntry is one line of an incident timeline. Repeated events with the

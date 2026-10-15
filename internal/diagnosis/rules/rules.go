@@ -184,10 +184,12 @@ func (r DependencyDown) Evaluate(c *Context) []api.Hypothesis {
 			if len(x.portHits) > 0 {
 				h.Supporting = append(h.Supporting, collapsed(x.portHits, describe)...)
 			}
-			// Readiness or lifecycle failures of the dependent after d failed.
+			// The dependent's later failures. For a direct dependent the
+			// connection errors are already cited above; for one reached through
+			// the chain, its errors (aimed at the intermediate) are the evidence.
 			var rest []api.Event
 			for _, e := range x.after {
-				if e.Type != api.EventDependencyConnFailed {
+				if e.Type != api.EventDependencyConnFailed || x.via != "" {
 					rest = append(rest, e)
 				}
 			}
@@ -422,7 +424,7 @@ func (r DependencyNotRunning) Evaluate(c *Context) []api.Hypothesis {
 			h.Supporting = collapsed(hits, describe)
 			n := 0
 			for _, e := range hits {
-				n += 1 + e.Attrs.Repeats
+				n += e.Lines()
 			}
 			level := api.ConfidenceMedium
 			factors := []string{fmt.Sprintf("%s failed to connect to %s %d time(s)", svc, target, n)}
