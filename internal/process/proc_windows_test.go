@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -91,10 +92,10 @@ func TestOutputPipes(t *testing.T) {
 	}
 	o, _ := io.ReadAll(out)
 	e, _ := io.ReadAll(errR)
-	if string(o) != "to-out\r\n" && string(o) != "to-out\n" {
+	if strings.TrimSpace(string(o)) != "to-out" {
 		t.Fatalf("stdout %q", o)
 	}
-	if string(e) != "to-err\r\n" && string(e) != "to-err\n" {
+	if strings.TrimSpace(string(e)) != "to-err" {
 		t.Fatalf("stderr %q", e)
 	}
 	if !p.Exit().Success() {

@@ -109,14 +109,16 @@ var Patterns = []Pattern{
 		Type:        api.EventDependencyConnFailed,
 		Severity:    api.SeverityError,
 		Re: regexp.MustCompile(`(?i)(?:` +
-			`dial tcp\S* (?P<target>\S+?:\d+): connect: connection refused` +
+			`dial tcp\S* (?P<target>\S+?:\d+): (?:connect|connectex): (?:connection refused|No connection could be made because the target machine actively refused it\.?)` +
 			`|ECONNREFUSED (?P<target2>\S+?:\d+)` +
 			`|proxying request \S+ to https?://(?P<target3>[^/\s]+)\S* \[ECONNREFUSED\]` +
 			`|connect ECONNREFUSED(?: (?P<target4>\S+?:\d+))?` +
 			`|connection refused` +
-			`|Connection refused)`),
+			`|Connection refused` +
+			`|actively refused it)`),
 		Match: []string{
 			"dial tcp 127.0.0.1:5432: connect: connection refused",
+			"dial tcp 127.0.0.1:5432: connectex: No connection could be made because the target machine actively refused it.",
 			"Error: connect ECONNREFUSED 127.0.0.1:8080",
 			"[HPM] Error occurred while proxying request localhost:5173/api to http://localhost:8080/ [ECONNREFUSED]",
 			"requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8000): Connection refused",

@@ -71,6 +71,9 @@ func runInstaller(t *testing.T, env ...string) (int, string) {
 }
 
 func TestInstallScript(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("install.sh is a Unix shell installer; Windows uses release zips")
+	}
 	if _, err := exec.LookPath("curl"); err != nil {
 		t.Skip("needs curl")
 	}

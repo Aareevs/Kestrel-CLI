@@ -43,6 +43,7 @@ var (
 	children     = flag.Int("children", 0, "spawn this many child processes that sleep forever")
 	sleepMode    = flag.Bool("sleep", false, "do nothing but sleep (used for --children)")
 	ignoreTerm   = flag.Bool("ignore-term", false, "ignore SIGTERM (forces the supervisor to escalate)")
+	burstStderr  = flag.Int("burst-stderr", 0, "write this many lines to stderr immediately")
 	pidfile      = flag.String("pidfile", "", "append this process's PID (and its children's) to a file")
 	recoverFile  = flag.String("recover-file", "", "report unhealthy (503) until this file exists")
 	says         sayList
@@ -66,9 +67,6 @@ func main() {
 	flag.Var(&says, "say", "line to print (repeatable)")
 	flag.Parse()
 
-	if *ignoreTerm {
-		signal.Ignore(syscall.SIGTERM, os.Interrupt)
-	}
 	if *pidfile != "" {
 		appendPID(os.Getpid())
 	}
@@ -121,26 +119,31 @@ func main() {
 		go flood()
 	}
 
-	stop := make(chan os.Signal, 1)
-	if *ignoreTerm {
-		// Notify would re-enable SIGTERM delivery; keep it ignored.
-		signal.Notify(stop, os.Interrupt)
-	} else {
-		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	for i := 0; i < *burstStderr; i++ {
+		errf("working on item %d", i)
 	}
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	var timer <-chan time.Time
 	if *exitAfter > 0 {
 		timer = time.After(*exitAfter)
 	}
-	select {
-	case s := <-stop:
-		out("%s received %v, shutting down", *name, s)
-		os.Exit(0)
-	case <-timer:
-		if *exitMessage != "" {
-			errf("%s", *exitMessage)
+	for {
+		select {
+		case s := <-stop:
+			if *ignoreTerm {
+				// Politeness ignored; supervisor must escalate to SIGKILL / TerminateJobObject.
+				continue
+			}
+			out("%s received %v, shutting down", *name, s)
+			os.Exit(0)
+		case <-timer:
+			if *exitMessage != "" {
+				errf("%s", *exitMessage)
+			}
+			os.Exit(*exitCode)
 		}
-		os.Exit(*exitCode)
 	}
 }
 

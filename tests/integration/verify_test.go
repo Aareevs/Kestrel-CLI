@@ -64,8 +64,20 @@ func TestScenarioERecovery(t *testing.T) {
 	home, project := t.TempDir(), t.TempDir()
 	project, _ = filepath.EvalSymlinks(project)
 	os.MkdirAll(filepath.Join(project, "bin"), 0o755)
-	if err := os.Symlink(fake, filepath.Join(project, "bin", "fakesvc")); err != nil {
-		t.Fatal(err)
+	dest := filepath.Join(project, "bin", "fakesvc")
+	if runtime.GOOS == "windows" {
+		dest += ".exe"
+		data, err := os.ReadFile(fake)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dest, data, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		if err := os.Symlink(fake, dest); err != nil {
+			t.Fatal(err)
+		}
 	}
 	port := freePort(t)
 	fixed := filepath.Join(project, "fixed")
@@ -292,9 +304,8 @@ func TestVerifyCommandFailureTimeoutAndRedaction(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		failCmd = "echo FAIL: login with token=sup3rs3cret & exit 3"
 	}
-	project := execProject(t, fmt.Sprintf(`    - { type: command, run: %q, timeout: 5s }
-    - { type: command, run: "%s --sleep --pidfile %s", timeout: 300ms }
-`, failCmd, fake, pidfile))
+	project := execProject(t, fmt.Sprintf("    - { type: command, run: %q, timeout: 5s }\n    - { type: command, run: %q, timeout: 300ms }\n",
+		failCmd, fmt.Sprintf("%s --sleep --pidfile %s", fake, pidfile)))
 
 	code, rep, _ := verifyJSON(t, home, project, "--window", "500ms", "--interval", "250ms", "--allow-exec")
 	if code != 1 || rep.Verdict != api.VerdictPartiallyResolved {

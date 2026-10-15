@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"os"
 	"os/exec"
 	"syscall"
 	"unsafe"
@@ -12,9 +11,13 @@ import (
 )
 
 var (
-	modpsapi                 = syscall.NewLazyDLL("psapi.dll")
-	procGetProcessMemoryInfo = modpsapi.NewProc("GetProcessMemoryInfo")
+	modpsapi                     = syscall.NewLazyDLL("psapi.dll")
+	procGetProcessMemoryInfo     = modpsapi.NewProc("GetProcessMemoryInfo")
+	modkernel32                  = syscall.NewLazyDLL("kernel32.dll")
+	procGenerateConsoleCtrlEvent = modkernel32.NewProc("GenerateConsoleCtrlEvent")
 )
+
+const ctrlBreakEvent = 1 // CTRL_BREAK_EVENT
 
 type processMemoryCounters struct {
 	CB                         uint32
@@ -44,8 +47,9 @@ func killProcGroup(cmd *exec.Cmd) {
 
 func sendCtrlC(cmd *exec.Cmd) {
 	if cmd.Process != nil {
-		// On Windows, os.Interrupt delivers a console Ctrl+C event
-		_ = cmd.Process.Signal(os.Interrupt)
+		// On Windows, os.Process.Signal(os.Interrupt) returns ERROR_NOT_SUPPORTED.
+		// Sending CTRL_BREAK_EVENT to the process group delivers os.Interrupt to Go processes.
+		_, _, _ = procGenerateConsoleCtrlEvent.Call(ctrlBreakEvent, uintptr(cmd.Process.Pid))
 	}
 }
 
