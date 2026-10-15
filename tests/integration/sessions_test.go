@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -169,8 +170,10 @@ func TestSessionPersistListShowExportDelete(t *testing.T) {
 			t.Fatalf("event %d: seq=%d session=%s", i, e.Seq, e.SessionID)
 		}
 	}
-	if fi, _ := os.Stat(bundlePath); fi.Mode().Perm() != 0o600 {
-		t.Errorf("export file mode %v, want 0600", fi.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		if fi, _ := os.Stat(bundlePath); fi.Mode().Perm() != 0o600 {
+			t.Errorf("export file mode %v, want 0600", fi.Mode().Perm())
+		}
 	}
 	// Export refuses to overwrite and to the same stdout path works.
 	if code, _, errs := kestrelCmd(t, home, dir, "sessions", "export", "--out", bundlePath); code != 2 || !strings.Contains(errs, "never overwrites") {
@@ -398,8 +401,8 @@ func TestStorageFailureNeverStopsSupervision(t *testing.T) {
 }
 
 func TestStorageUnwritableNeverStopsSupervision(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("permission bits are not enforced for root")
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("permission bits are not enforced here")
 	}
 	_, fake := buildBins(t)
 	home := filepath.Join(t.TempDir(), "kestrel-home")

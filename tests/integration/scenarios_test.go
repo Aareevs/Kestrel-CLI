@@ -93,7 +93,11 @@ services:
 		check: func(t *testing.T, rep api.DiagnosisReport) {
 			d := onlyIncident(t, rep)
 			top := d.Hypotheses[0]
-			if top.RuleID != "K001-port-conflict" || top.Confidence.Level != api.ConfidenceHigh || !strings.HasPrefix(top.NextStep.Command, "lsof -nP -iTCP:") {
+			wantCmd := "lsof -nP -iTCP:"
+			if runtime.GOOS == "windows" {
+				wantCmd = "netstat -ano | findstr :"
+			}
+			if top.RuleID != "K001-port-conflict" || top.Confidence.Level != api.ConfidenceHigh || !strings.HasPrefix(top.NextStep.Command, wantCmd) {
 				t.Fatalf("top: %s %s %q", top.RuleID, top.Confidence.Level, top.NextStep.Command)
 			}
 		},
@@ -226,6 +230,7 @@ func (n normalizer) apply(s string) string {
 	s = timesRe.ReplaceAllString(s, "N time(s)")
 	s = durationRe.ReplaceAllString(s, "<dur>")
 	s = evtPadRe.ReplaceAllString(s, "  evt ")
+	s = regexp.MustCompile(`connectex: No connection could be made because the target machine actively refused it\.?`).ReplaceAllString(s, "connect: connection refused")
 	return s
 }
 

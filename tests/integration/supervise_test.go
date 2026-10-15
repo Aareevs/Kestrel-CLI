@@ -162,6 +162,7 @@ func TestFloodKeepsMemoryBounded(t *testing.T) {
 		}
 	}
 	k.ctrlC()
+	go io.Copy(io.Discard, k.stdout)
 	code := k.wait(t, 30*time.Second)
 	<-readDone
 
