@@ -118,7 +118,12 @@ func main() {
 	}
 
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	if *ignoreTerm {
+		// Notify would re-enable SIGTERM delivery; keep it ignored.
+		signal.Notify(stop, os.Interrupt)
+	} else {
+		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	}
 	var timer <-chan time.Time
 	if *exitAfter > 0 {
 		timer = time.After(*exitAfter)
