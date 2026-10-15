@@ -253,7 +253,11 @@ func TestInitConfirmation(t *testing.T) {
 }
 
 func TestConfigCommands(t *testing.T) {
-	root := t.TempDir()
+	// Kestrel reports the project root with symlinks resolved (/var -> /private/var on macOS).
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	os.MkdirAll(filepath.Join(root, "backend"), 0o755)
 
 	if r := run(t, root, nil, "config", "show"); r.code != cli.ExitUsage || !strings.Contains(r.stderr, "kestrel init") {

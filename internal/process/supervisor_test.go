@@ -117,7 +117,9 @@ func fast(h *config.Health) *config.Health {
 	h.Interval = config.Duration(50 * time.Millisecond)
 	h.Timeout = config.Duration(40 * time.Millisecond)
 	h.Retries = 2
-	h.StartupGrace = config.Duration(3 * time.Second)
+	// Generous: under a loaded machine (parallel test packages) a process can
+	// take seconds just to start, and these tests are about ordering, not speed.
+	h.StartupGrace = config.Duration(15 * time.Second)
 	if h.Type == config.HealthHTTP {
 		h.ExpectStatus = "200-399"
 	}
