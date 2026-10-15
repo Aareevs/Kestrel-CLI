@@ -15,7 +15,7 @@ conversation.
   5. Never commit phase work straight to `main`. Small fixes may go direct only when the owner asks.
 - **No AI attribution.** Never add a `Co-Authored-By: Claude …` (or any AI co-author) trailer to commits, and never
   put "🤖 Generated with Claude Code" or similar in PR descriptions.
-- **No release yet.** Release tooling exists (GoReleaser, `scripts/install.sh`, Homebrew cask, `release.yml`),
+- **No release yet.** Release tooling exists (GoReleaser, `scripts/install.sh`, the Homebrew formula script, `release.yml`, `homebrew.yml`),
   but the owner doesn't want a release. Never push tags, create GitHub releases or drafts, create or push the
   Homebrew tap, or trigger publishing workflows without explicit go-ahead. Dry runs (`make release-snapshot`) are
   fine.

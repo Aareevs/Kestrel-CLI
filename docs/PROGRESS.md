@@ -1,5 +1,20 @@
 # Progress
 
+## Follow-up: Homebrew formula instead of a cask (2026-10-15). Not released.
+
+- **What changed:** the tap now gets a standard **formula** (`Formula/kestrel.rb`), which works on macOS and
+  Linux and has the same shape as `Octo-sh/homebrew-tap`. GoReleaser no longer handles Homebrew. Its formula
+  option (`brews`) is deprecated and makes `goreleaser check` fail.
+- **How it's built:** `scripts/homebrew-formula.sh` renders the formula from a release's `checksums.txt`.
+- **When it's pushed:** `.github/workflows/homebrew.yml` pushes it to `Aareevs/homebrew-tap` only when a release is
+  **published**, so the formula never points at downloads that don't exist yet.
+- **Checked:** `TestHomebrewFormula` checks every platform's URL and checksum, valid Ruby (`ruby -c`), and that a
+  missing archive fails. That last check found a real bug: inside the template, a failed lookup would have left
+  an empty checksum instead of stopping the script. Fixed. The formula rendered from a real snapshot is valid
+  Ruby, and its checksums match `checksums.txt`. `goreleaser check` and `release --snapshot --clean` pass.
+- **Install command unchanged:** `brew install aareevs/tap/kestrel`. Nothing was tagged, released, or pushed to a
+  tap.
+
 ## Phase 7: Hardening and release tooling (2026-10-15). Not released.
 
 **No release has been made.** You asked for none yet. Nothing was tagged, no GitHub release or draft was
