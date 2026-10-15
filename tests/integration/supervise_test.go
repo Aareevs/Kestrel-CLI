@@ -5,6 +5,7 @@ package integration
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Aareevs/Kestrel-CLI/internal/cli"
 	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
@@ -453,5 +455,57 @@ func TestWatchUsageErrors(t *testing.T) {
 	}
 	if code, out := run("run"); code != 2 || !strings.Contains(out, "nothing to run") {
 		t.Errorf("run with nothing: %d %s", code, out)
+	}
+}
+
+// In-process variants of run/watch/status, so coverage tooling sees the
+// app, cli and output code paths that the subprocess tests exercise.
+func TestSupervisionInProcess(t *testing.T) {
+	_, fake := buildBins(t)
+	t.Setenv("KESTREL_HOME", t.TempDir())
+	dir := t.TempDir()
+
+	r := run(t, dir, nil, "run", "--no-color", "--", fake, "--secrets", "--hostile", "--exit-after", "400ms")
+	if r.code != 0 {
+		t.Fatalf("run: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	for _, want := range []string{"▶ started", "[REDACTED:", "rm -rf ~", "■ exited (exit code 0)", "SERVICE"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("run output lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	if strings.Contains(r.stdout, "sup3rs3cret") {
+		t.Errorf("secret leaked:\n%s", r.stdout)
+	}
+
+	r = run(t, dir, nil, "run", "--quiet", "--svc", "a="+fake+" --exit-after 200ms", "--svc", "b="+fake+" --exit-after 300ms --exit-code 4")
+	if r.code != 1 || !strings.Contains(r.stdout, "crashed (exit code 4)") || strings.Contains(r.stdout, "starting (pid") {
+		t.Fatalf("multi-service quiet run: exit %d\n%s", r.code, r.stdout)
+	}
+
+	port := freePort(t)
+	cfg := fmt.Sprintf("version: 1\nservices:\n  - name: web\n    command: '%s --listen 127.0.0.1:%d --exit-after 1s'\n    health: { type: http, url: \"http://127.0.0.1:%d/health\", interval: 100ms, timeout: 100ms }\n  - name: ext\n    health: { type: tcp, address: \"127.0.0.1:%d\", interval: 100ms, timeout: 100ms }\n", fake, port, port, port)
+	os.WriteFile(filepath.Join(dir, "kestrel.yaml"), []byte(cfg), 0o644)
+	// watch lasts until its context ends; a deadline plays the part of Ctrl-C.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var wout, werr bytes.Buffer
+	code := cli.Execute(ctx, cli.Streams{
+		In: strings.NewReader(""), Out: &wout, Err: &werr,
+		Getenv: func(string) string { return "" }, Getwd: func() (string, error) { return dir, nil },
+	}, []string{"watch", "--format", "json", "web"})
+	r = result{code: code, stdout: wout.String(), stderr: werr.String()}
+	if r.code != 0 || !strings.Contains(r.stdout, `"type":"probe_ready"`) || strings.Contains(r.stdout, `"service":"ext"`) {
+		t.Fatalf("watch web (ext not selected): exit %d\n%s", r.code, r.stdout)
+	}
+
+	r = run(t, dir, nil, "status", "--no-color")
+	if !strings.Contains(r.stdout, "no active session") || !strings.Contains(r.stdout, "web") || r.code != 1 {
+		t.Fatalf("status after session: exit %d\n%s", r.code, r.stdout)
+	}
+	r = run(t, dir, nil, "status", "--format", "json")
+	var rep api.StatusReport
+	if err := json.Unmarshal([]byte(r.stdout), &rep); err != nil || rep.Active || len(rep.Services) != 2 {
+		t.Fatalf("status json: %v %s", err, r.stdout)
 	}
 }
