@@ -67,6 +67,7 @@ func DefaultStreams() Streams {
 // globals are the persistent flags shared by every command.
 type globals struct {
 	project string
+	session string
 	format  string
 	verbose bool
 	quiet   bool
@@ -133,6 +134,7 @@ func NewRootCmd(s Streams) *cobra.Command {
 
 	pf := root.PersistentFlags()
 	pf.StringVar(&g.project, "project", "", "project directory (default: nearest ancestor with kestrel.yaml, else the current directory)")
+	pf.StringVar(&g.session, "session", "", "session to act on: full ID, unique prefix, or 'last' (default: last)")
 	pf.StringVar(&g.format, "format", "text", "output format: text or json")
 	pf.BoolVarP(&g.verbose, "verbose", "v", false, "verbose diagnostic logging to stderr")
 	pf.BoolVarP(&g.quiet, "quiet", "q", false, "print only essential output")
@@ -144,6 +146,8 @@ func NewRootCmd(s Streams) *cobra.Command {
 		newRunCmd(g),
 		newWatchCmd(g),
 		newStatusCmd(g),
+		newSessionsCmd(g),
+		newCleanupCmd(g),
 		newConfigCmd(g),
 		newDoctorCmd(g),
 		newVersionCmd(g),
