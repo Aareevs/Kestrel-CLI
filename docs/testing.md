@@ -119,3 +119,21 @@ or a `y` at the prompt, it does.
 Scenarios still to come: F–H and J in hardening (Phase 7). Phases 2–3 already cover parts of F
 (redaction in terminal and JSON output, the database, WAL, segments, and export), G (interrupt, no orphans,
 storage flushed), H (bounded memory, overload events, retention) and J (hostile lines are inert).
+
+## MCP tests
+
+`tests/integration/mcp_test.go` connects the official Go SDK client to the real `kestrel mcp` binary over stdio
+(`TestMCPRealDiagnosisAndRedaction`, the Phase 6 exit criterion). It checks:
+
+- **Tools:** exactly the eight documented tools exist, each read-only, closed-world, and with an output schema.
+- **Real diagnosis:** `get_diagnosis` returns the same incidents, rules, confidences, and leading evidence IDs as
+  `kestrel diagnose --format json`.
+- **Every tool works** on a recorded session that contains fake secrets and hostile lines.
+- **Redaction:** no fake secret appears anywhere in what the client received, and the hostile lines arrive as
+  inert text.
+- **Errors:** they come back as tool errors, and an unknown tool name is refused.
+
+`TestMCPRedactsWithCurrentProjectPatterns` adds a redaction pattern after the session was recorded, and asserts
+the token is still stored but never reaches the client. Disabling the server's outbound redaction makes it fail.
+`TestMCPInProcess` serves the CLI's `mcp` command over pipes, for coverage.
+

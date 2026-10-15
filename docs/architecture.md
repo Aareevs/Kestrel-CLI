@@ -18,6 +18,7 @@ internal/graph/         dependency graph: declared depends_on + port evidence (n
 internal/correlation/   anomalies → incidents, initiating failure, timelines
 internal/diagnosis/     rule engine; rules/ holds K001–K006
 internal/verification/  stability-window sampling, verdicts, authorized command checks
+internal/mcp/           read-only MCP server (official Go SDK, stdio): tools over internal/app
 internal/collectors/    line framing, repeat folding, bounded buffer with backpressure
 internal/health/        http/tcp/process probes, readiness state machine
 internal/process/       process groups / Job Objects, graceful-then-forced stop, supervisor
@@ -29,8 +30,7 @@ tests/fixtures/projects sample projects scanned by golden tests
 tests/integration/      in-process CLI tests and golden files
 ```
 
-Packages listed in the build spec but not here yet (verification, mcp) are created in the phase that first has
-code for them.
+Every package in the build spec's package map now exists.
 
 ## Rules
 
@@ -182,6 +182,21 @@ A post-pass then reconciles the results:
   reads the database (WAL) and the live status file.
 - Reports are stored in `verifications` (migration 003, `ON DELETE CASCADE` with the session) and listed by
   `timeline`.
+
+## MCP server
+
+```text
+ MCP client ──stdio──▶ internal/mcp (8 read-only tools) ──▶ internal/app ──▶ storage / config / discovery
+                         │                                    (same code as the CLI)
+                         └── every result: JSON tree → redact each string (project patterns) → typed output
+```
+
+- Tools are registered with the SDK's typed `AddTool`, so each one publishes input and output schemas derived from
+  the `pkg/api` types. The handlers only translate arguments and call `internal/app`.
+- Read-only by construction: the server has no tool that reaches `Watch`, `RunCommands`, `Verify`, or anything that
+  writes. The annotations say `readOnlyHint: true, openWorldHint: false`.
+- Output is redacted again on the decoded value, not the JSON text, so a replacement can't corrupt the JSON, and
+  with the project's current patterns, so new patterns cover old sessions.
 
 ## Config
 
