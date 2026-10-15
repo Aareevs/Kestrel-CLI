@@ -20,7 +20,7 @@ we are executing it, the decisions made along the way, and the risks we are watc
 | 4 | Correlation + diagnosis: graph, incidents, timeline, rule engine, `timeline`, `diagnose` | Scenarios A, B, C, D, I golden; every hypothesis has evidence IDs | done (see PROGRESS.md) |
 | 5 | Verification: `verify`, stability window, authorized exec, before/after | Scenario E; exec refused without authorization (tested) | done (see PROGRESS.md) |
 | 6 | MCP server (read-only, reuses `internal/app`) | test client retrieves real diagnosis; redaction verified | done (see PROGRESS.md) |
-| 7 | Hardening + release: Scenarios F, G, H, J; GoReleaser; install script; tap; final README | `goreleaser release --snapshot --clean` succeeds | planned |
+| 7 | Hardening + release: Scenarios F, G, H, J; GoReleaser; install script; tap; final README | `goreleaser release --snapshot --clean` succeeds | done, not released (see PROGRESS.md) |
 
 ## Phase 1 breakdown
 
@@ -120,6 +120,20 @@ we are executing it, the decisions made along the way, and the risks we are watc
 - **Redact on the way out again**, per string on the decoded result, with the project's current patterns.
 - **Three small read-only queries were added to `internal/app`** (`Services`, `RecentErrors`,
   `VerificationResults`) rather than putting logic in the MCP layer.
+
+## Phase 7 decisions
+
+- **Release tooling is built, not used.** You asked for no release yet. Nothing has been tagged, released, or
+  published, and no tap repository was created. A tag push creates only a **draft** release, which someone has to
+  publish by hand. The first-release steps are in `docs/releasing.md`.
+- **GoReleaser is pinned (v2.18.2) and run via `go run`**, as staticcheck is: nothing is installed globally. CI
+  validates the config on every PR.
+- **The tap gets a cask, not a formula,** because GoReleaser v2 deprecated generating formulas. The install
+  command is unchanged: `brew install aareevs/tap/kestrel`.
+- **The installer verifies before it installs**, never uses sudo, never edits shell profiles, and can be pointed
+  at a local directory, which is how it's tested without a release.
+- **Each scenario gets one end-to-end test** of every guarantee the spec states for it, rather than relying on
+  the pieces earlier phases already tested.
 
 ## Risks
 

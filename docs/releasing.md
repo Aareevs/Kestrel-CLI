@@ -1,0 +1,77 @@
+# Releasing
+
+Kestrel is released with [GoReleaser](https://goreleaser.com) v2 (pinned to v2.18.2). **No release has been
+published yet.** Everything below has been tested locally as a snapshot, which builds every artifact and
+publishes nothing.
+
+## What a release produces
+
+| Artifact | Details |
+|---|---|
+| Binaries | darwin/arm64, darwin/amd64, linux/arm64, linux/amd64, windows/amd64. Static (`CGO_ENABLED=0`; SQLite is pure Go), `-trimpath`, version/commit/date set via `-ldflags`. |
+| Archives | `kestrel_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows), each with `kestrel`, `LICENSE`, and `README.md`. The install script depends on this name. |
+| `checksums.txt` | SHA-256 of every archive. |
+| Homebrew cask | `Casks/kestrel.rb`, pushed to the tap repository. |
+| GitHub release | Created as a **draft**, with a changelog from commit subjects (docs/test commits and merges left out). |
+
+Config: [`.goreleaser.yaml`](../.goreleaser.yaml).
+
+## Dry run (any time)
+
+```bash
+make release-check      # validate .goreleaser.yaml
+make release-snapshot   # build everything into dist/, publish nothing
+```
+
+Both use `go run`, so GoReleaser lands in the Go module cache and is not installed globally. GoReleaser v2.18.2
+itself needs Go ≥ 1.27.1, so `go run` fetches that toolchain into the module cache too, and local snapshot
+binaries are built with it. The release workflow builds with the Go version in `go.mod`.
+
+Try the installer against the snapshot (it needs a directory path without spaces, because it becomes a `file://`
+URL):
+
+```bash
+mkdir -p /tmp/kestrel-rel && cp dist/*.tar.gz dist/checksums.txt /tmp/kestrel-rel/
+KESTREL_VERSION=<snapshot version from dist/> KESTREL_DOWNLOAD_BASE=file:///tmp/kestrel-rel \
+  KESTREL_INSTALL_DIR=/tmp/kestrel-bin sh scripts/install.sh
+```
+
+## Before the first release (one-time setup)
+
+1. **Create the tap repository** `github.com/Aareevs/homebrew-tap` (public, can be empty).
+2. **Create a token** that can push to it: a fine-grained PAT with *Contents: read and write* on `homebrew-tap`
+   only. Add it to this repository's secrets as `HOMEBREW_TAP_TOKEN`.
+3. **Check the README** install section: it says the one-liner and Homebrew start working with the first release.
+
+## Cutting a release
+
+1. Make sure `main` is green and `docs/PROGRESS.md` is current.
+2. Tag and push: `git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0`.
+3. [`.github/workflows/release.yml`](../.github/workflows/release.yml) runs: `go test -race ./...`, then
+   GoReleaser. It builds the artifacts, pushes the cask to the tap, and creates a **draft** release.
+4. Review the draft on GitHub (assets, changelog), then **publish** it. The install script's "latest" lookup and
+   the cask URLs only work once it is published.
+
+Nothing happens unless a `v*` tag is pushed. Pushing a tag only produces a draft.
+
+## The install script
+
+[`scripts/install.sh`](../scripts/install.sh) (POSIX `sh`):
+
+1. Detects the OS (macOS/Linux) and architecture (amd64/arm64).
+2. Picks `KESTREL_VERSION`, or the latest published release.
+3. Downloads the archive and `checksums.txt`.
+4. Verifies the SHA-256 and **installs nothing on a mismatch**.
+5. Installs to `KESTREL_INSTALL_DIR` (default `~/.local/bin`).
+
+It never uses `sudo` and never edits shell profiles; it only tells you when the directory isn't on your `PATH`.
+`KESTREL_DOWNLOAD_BASE` points it at a mirror or a local directory. `TestInstallScript` covers the happy path, a
+tampered archive, and a missing version.
+
+## Notes
+
+- **Not notarized.** The binaries aren't signed or notarized for macOS. The cask removes the quarantine attribute
+  after install, and the install script's downloads aren't quarantined. Notarization would need an Apple Developer
+  account.
+- **A cask, not a formula.** GoReleaser v2 deprecated generating Homebrew formulas (`brews`) in favor of casks
+  (`homebrew_casks`), so the tap gets a cask. Users install it the same way: `brew install aareevs/tap/kestrel`.

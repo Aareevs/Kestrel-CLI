@@ -1,0 +1,33 @@
+name: release
+
+# Runs only when a version tag (v*) is pushed. It builds every platform,
+# checksums them, updates the Homebrew tap, and creates a DRAFT GitHub
+# release: nothing is public until someone reviews and publishes the draft.
+# See docs/releasing.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # changelog needs history
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: tests must pass before anything is built
+        run: go test -race ./...
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

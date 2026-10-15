@@ -6,8 +6,9 @@ COMMIT   ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS  := -s -w -X $(PKG)/internal/buildinfo.Version=$(VERSION) -X $(PKG)/internal/buildinfo.Commit=$(COMMIT) -X $(PKG)/internal/buildinfo.Date=$(DATE)
 STATICCHECK_VERSION ?= 2025.1.1
+GORELEASER_VERSION  ?= v2.18.2
 
-.PHONY: all build install test race vet fmt fmt-check lint cross check golden clean
+.PHONY: all build install test race vet fmt fmt-check lint cross check golden clean release-check release-snapshot
 
 all: check
 
@@ -44,6 +45,14 @@ cross:
 	GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/kestrel
 
 check: fmt-check vet test race build cross
+
+# Release dry runs (GoReleaser via go run; nothing is installed globally and
+# nothing is published). Artifacts land in dist/.
+release-check:
+	go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) check
+
+release-snapshot:
+	go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) release --snapshot --clean
 
 # Regenerate golden files after an intentional output change; review the diff.
 golden:

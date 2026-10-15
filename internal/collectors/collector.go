@@ -111,7 +111,10 @@ func (c *Collector) Wait() { <-c.done }
 // Emit stamps and enqueues an event produced by Kestrel itself (lifecycle,
 // probes). Message text is redacted like any other.
 func (c *Collector) Emit(ev api.Event) {
-	ev.Message = c.opts.Redactor.Redact(ev.Message)
+	// Supervisor messages embed text Kestrel didn't write (command lines,
+	// probe errors, a crash's last words), so they get the same treatment as
+	// output lines: control characters out, then redaction.
+	ev.Message = c.opts.Redactor.Redact(clean([]byte(ev.Message)))
 	if ev.Time.IsZero() {
 		ev.Time = c.stamper.Now()
 	}
