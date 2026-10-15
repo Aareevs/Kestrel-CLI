@@ -1,5 +1,3 @@
-//go:build !windows
-
 package process
 
 import (
@@ -9,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +27,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	fakesvc = filepath.Join(dir, "fakesvc")
+	if runtime.GOOS == "windows" {
+		fakesvc += ".exe"
+	}
 	if out, err := exec.Command("go", "build", "-o", fakesvc, "../../tests/fakesvc").CombinedOutput(); err != nil {
 		panic(fmt.Sprintf("building fakesvc: %v\n%s", err, out))
 	}

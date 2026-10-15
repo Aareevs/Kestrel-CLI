@@ -67,7 +67,7 @@ func main() {
 	flag.Parse()
 
 	if *ignoreTerm {
-		signal.Ignore(syscall.SIGTERM)
+		signal.Ignore(syscall.SIGTERM, os.Interrupt)
 	}
 	if *pidfile != "" {
 		appendPID(os.Getpid())
