@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -242,7 +245,7 @@ func (a *App) supervise(ctx context.Context, mode string, specs []process.Servic
 			o.Warn(msg)
 		}
 	}
-	rec, closeStore := a.openRecorder(stamper.SessionID, mode, names, warn)
+	rec, closeStore := a.openRecorder(stamper.SessionID, mode, names, topologyOf(specs), warn)
 	emit := sink
 	if rec != nil {
 		emit = collectors.SinkFunc(func(ev api.Event) {
@@ -353,6 +356,43 @@ func displayArgv(argv []string) string {
 		parts[i] = a
 	}
 	return strings.Join(parts, " ")
+}
+
+// topologyOf records what diagnosis needs to know about the services: names,
+// declared dependencies, and the ports their probes target.
+func topologyOf(specs []process.ServiceSpec) api.Topology {
+	t := api.Topology{Services: []api.ServiceTopology{}}
+	for _, sp := range specs {
+		st := api.ServiceTopology{Name: sp.Name, DependsOn: sp.DependsOn, External: sp.Run == nil}
+		if p := probePort(sp.Health); p > 0 {
+			st.Ports = []int{p}
+		}
+		t.Services = append(t.Services, st)
+	}
+	return t
+}
+
+// probePort is the port a health probe targets, or 0.
+func probePort(h *config.Health) int {
+	if h == nil {
+		return 0
+	}
+	var port string
+	switch h.Type {
+	case config.HealthHTTP:
+		u, err := url.Parse(h.URL)
+		if err != nil {
+			return 0
+		}
+		port = u.Port()
+		if port == "" {
+			port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+		}
+	case config.HealthTCP:
+		_, port, _ = net.SplitHostPort(h.Address)
+	}
+	n, _ := strconv.Atoi(port)
+	return n
 }
 
 func cleanServiceName(s string) string {

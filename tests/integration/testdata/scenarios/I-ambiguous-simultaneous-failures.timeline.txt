@@ -1,0 +1,10 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · billing, search
+
+Incident #1  ·  2 services affected  ·  started hh:mm:ss  ·  correlation weak
+  Initiating failure: unknown. 2 services failed with no dependency or port link between them (billing, search); the initiating failure can't be determined from this evidence
+  <time>  billing  ● started       started (pid N): <command>
+  <time>  search   ● started       started (pid N): <command>
+  <time>  billing  ✗ first anomaly ERROR: could not load pricing table
+  <time>  billing  ✗ key           crashed (exit code 1)
+  <time>  search   ✗ key           ERROR: index directory is locked
+  <time>  search   ✗ key           crashed (exit code 1)

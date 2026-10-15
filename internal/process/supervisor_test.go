@@ -185,6 +185,32 @@ func TestCrashIsRecordedAndDependentsStillStart(t *testing.T) {
 	}
 }
 
+// The last thing a process prints before dying must be recorded before its
+// exit, every time, so a diagnosis can see the cause. A burst of stderr lines
+// right before the dying words keeps the reader busy when the process exits,
+// which makes the race real (without the drain, the crash wins).
+func TestDyingWordsPrecedeTheExit(t *testing.T) {
+	script := `awk 'BEGIN { for (i = 0; i < 400; i++) print "working on item " i > "/dev/stderr" }'; echo "panic: last words" >&2; exit 2`
+	for i := 0; i < 10; i++ {
+		specs := []ServiceSpec{{Name: "w", Run: &Spec{Shell: script}}}
+		_, log, cancel, done := harness(t, specs, Options{ExitWhenDone: true, StopGrace: time.Second})
+		<-done
+		cancel()
+		crashIdx, _ := log.find("w", api.EventProcessCrashed)
+		log.mu.Lock()
+		var wordsIdx = -1
+		for j, e := range log.evs {
+			if e.Message == "panic: last words" {
+				wordsIdx = j
+			}
+		}
+		log.mu.Unlock()
+		if wordsIdx < 0 || crashIdx < 0 || wordsIdx > crashIdx {
+			t.Fatalf("run %d: last words at %d, crash at %d:\n%s", i, wordsIdx, crashIdx, log.dump())
+		}
+	}
+}
+
 func TestAutoProbeFromLogs(t *testing.T) {
 	port := freePort(t)
 	specs := []ServiceSpec{{Name: "web", AutoProbe: true,

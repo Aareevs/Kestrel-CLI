@@ -1,0 +1,13 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · database, api, frontend
+
+Incident #1  ·  3 services affected  ·  started hh:mm:ss  ·  correlation strong
+  Initiating failure: database (evt …<evt>)
+  <time>  database  ● started       started (pid N): <command>
+  <time>  database  ✗ first anomaly FATAL:  database files are incompatible with server
+  <time>  database  ✗ key           crashed (exit code 1)
+  <time>  api       ↳ symptom       dial tcp 127.0.0.1:<database-port>: connect: connection refused  ×N
+  <time>  database  ✗ key           never became ready: tcp 127.0.0.1:<database-port> (dial 127.0.0.1:<database-port>: connect: connection refused)
+  <time>  api       ↳ symptom       never became ready: http http://127.0.0.1:<api-port>/health (dial 127.0.0.1:<api-port>: connect: connection r…
+  <time>  frontend  ↳ symptom       Error: connect ECONNREFUSED 127.0.0.1:<api-port>  ×N
+
+Dependencies: api → database (declared), frontend → api (declared)

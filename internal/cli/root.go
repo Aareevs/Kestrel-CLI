@@ -146,6 +146,8 @@ func NewRootCmd(s Streams) *cobra.Command {
 		newRunCmd(g),
 		newWatchCmd(g),
 		newStatusCmd(g),
+		newTimelineCmd(g),
+		newDiagnoseCmd(g),
 		newSessionsCmd(g),
 		newCleanupCmd(g),
 		newConfigCmd(g),

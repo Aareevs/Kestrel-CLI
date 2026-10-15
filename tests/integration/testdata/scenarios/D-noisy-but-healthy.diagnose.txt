@@ -1,0 +1,3 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · api
+
+No incidents: nothing in this session failed. Warnings alone don't make an incident.

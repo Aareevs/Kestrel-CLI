@@ -14,6 +14,9 @@ internal/output/        TTY/NO_COLOR detection, ANSI styles, text renderers, JSO
 internal/events/        event identity (ULID, seq, fingerprint), level detection, pattern library
 internal/privacy/       redaction applied before anything is printed, stored, or exported
 internal/storage/       SQLite sessions + events, log segments, migrations, retention, export
+internal/graph/         dependency graph: declared depends_on + port evidence (never timing)
+internal/correlation/   anomalies → incidents, initiating failure, timelines
+internal/diagnosis/     rule engine; rules/ holds K001–K006
 internal/collectors/    line framing, repeat folding, bounded buffer with backpressure
 internal/health/        http/tcp/process probes, readiness state machine
 internal/process/       process groups / Job Objects, graceful-then-forced stop, supervisor
@@ -25,8 +28,8 @@ tests/fixtures/projects sample projects scanned by golden tests
 tests/integration/      in-process CLI tests and golden files
 ```
 
-Packages listed in the build spec but not here yet (graph, correlation, diagnosis, verification, storage, mcp)
-are created in the phase that first has code for them.
+Packages listed in the build spec but not here yet (verification, mcp) are created in the phase that first has
+code for them.
 
 ## Rules
 
@@ -137,6 +140,31 @@ A post-pass then reconciles the results:
 - **Project identity.** Sessions are keyed by the project root with symlinks resolved, so `/var/…` and
   `/private/var/…` can't split one project's history.
 
+## Correlation and diagnosis
+
+```text
+ stored session ──▶ topology + diagnostic events ──▶ graph ──▶ incidents ──▶ rules ──▶ ranked hypotheses
+                    (names, depends_on, probe ports)          (strong/weak     (K001–K006,   (evidence IDs,
+                                                               links, roots)    pure funcs)   factors, next step)
+```
+
+- **Topology** is recorded with each session (migration 002), so any stored session can be diagnosed later.
+  Diagnosis reads only the diagnostic events: non-log events, warn+ lines, and listen announcements.
+- **Graph.** Declared edges come from `depends_on`. Inferred edges come only from connection errors aimed at a port
+  exactly one service owns. A contested port has no owner. Two services failing together never creates an edge.
+- **Incidents.** Anomalies join the current incident while they keep arriving within `correlation.window`. Each
+  join is strong (same service, dependency path, port) or weak (time only), and the incident reports its
+  correlation strength separately from any hypothesis's confidence.
+- **Initiating failure.** A member is explained when it depends on a member that failed earlier. One unexplained
+  member is the initiating failure. With several, the incident says so and is diagnosed `unresolved`.
+- **Rules** are pure functions of a context (incident, graph, events, the output before each failure). They
+  never touch storage or the system, which keeps them deterministic and unit-testable. The engine drops any
+  hypothesis without evidence and ranks the rest. See [diagnosis-rules.md](diagnosis-rules.md).
+- **Causes precede crashes.** When a process exits, the supervisor lets its remaining output drain (up to 2s)
+  before recording the exit, so the line that explains a crash always has an earlier `seq` than the crash.
+- **Counting.** A repeat summary stands for exactly `attrs.repeats` folded lines (`Event.Lines()`). Timelines
+  merge it into the run it continues.
+
 ## Config
 
 `config.Parse` decodes the file twice. The `yaml.Node` tree supplies line numbers. A `yaml.Decoder` with
@@ -166,6 +194,9 @@ Dev-only, not in `go.mod`: staticcheck, run with `go run honnef.co/go/tools/cmd/
 - Event source type is named `api.EventSource` because `api.Source` already names discovery sources.
 - One event type was added to the spec's initial set: `probe_ready` (first passing probe), which timelines need
   to anchor "last known healthy".
+- Rule `K004-startup-failure` is separate from the spec's `K003-crash-after-start`, so "never became healthy" and
+  "crashed after being healthy" stay distinct claims. `K005` (dependency not running) and `K006` (missing module)
+  were added because they are common, cheap to detect with evidence, and come with an obvious next step.
 - The supervisor lives in `internal/process`, as the spec's package map suggests, next to the
   process-group code it drives.
 - `config show --format json` emits the config document itself (`internal/config` types with JSON tags). Its

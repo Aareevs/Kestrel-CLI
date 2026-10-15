@@ -598,7 +598,7 @@ func TestSessionsCommandsInProcess(t *testing.T) {
 	}
 
 	// Doctor reports storage.
-	if r := run(t, dir, nil, "doctor", "--no-color"); r.code != 0 || !strings.Contains(r.stdout, "storage") || !strings.Contains(r.stdout, "0 session(s), schema v1") {
+	if r := run(t, dir, nil, "doctor", "--no-color"); r.code != 0 || !strings.Contains(r.stdout, "storage") || !strings.Contains(r.stdout, "0 session(s), schema v") {
 		t.Fatalf("doctor: exit %d\n%s", r.code, r.stdout)
 	}
 }

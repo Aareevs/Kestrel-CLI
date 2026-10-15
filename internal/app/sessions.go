@@ -56,7 +56,7 @@ func (a *App) policy() storage.Policy {
 // openRecorder starts persisting a session. If storage is unavailable it
 // returns a nil recorder after warning: supervision never depends on it.
 // closeStore finishes the session, applies retention, and closes the store.
-func (a *App) openRecorder(sessionID, mode string, services []string, warn func(string)) (*storage.Recorder, func(status string, final []api.ServiceStatus) *api.RetentionResult) {
+func (a *App) openRecorder(sessionID, mode string, services []string, topo api.Topology, warn func(string)) (*storage.Recorder, func(status string, final []api.ServiceStatus) *api.RetentionResult) {
 	ctx := context.Background()
 	st, err := a.openStoreRecovered(ctx)
 	if err != nil {
@@ -64,7 +64,7 @@ func (a *App) openRecorder(sessionID, mode string, services []string, warn func(
 		return nil, nil
 	}
 	if err := st.CreateSession(ctx, storage.NewSession{
-		ID: sessionID, Mode: mode, ProjectRoot: a.ProjectRoot, PID: os.Getpid(), StartedAt: a.Now(), Services: services,
+		ID: sessionID, Mode: mode, ProjectRoot: a.ProjectRoot, PID: os.Getpid(), StartedAt: a.Now(), Services: services, Topology: topo,
 	}); err != nil {
 		st.Close()
 		warn(fmt.Sprintf("session storage unavailable, this session will not be saved: %v", err))

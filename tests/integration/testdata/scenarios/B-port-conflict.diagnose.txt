@@ -1,0 +1,18 @@
+Session <session> · watch · closed · hh:mm:ss–hh:mm:ss · web
+
+Incident #1  ·  1 service affected  ·  started hh:mm:ss  ·  correlation strong
+  Initiating failure: web (evt …<evt>)
+
+  Likely initiating failure  [hypothesis · high]
+  web could not start: port <web-port> is already in use
+    ✓ web: could not bind port <web-port>  evt …<evt>
+    ✓ web exited with code 1  evt …<evt>
+    ✗ no contradicting evidence found
+    high because: the process itself reported the bind failure (pattern P001-port-in-use); web exited with code 1 right after
+    rule K001-port-conflict
+
+  Next step
+    See which process holds port <web-port>, then stop it yourself or move web to a free port. Kestrel never signals processes it didn't start.
+    $ lsof -nP -iTCP:<web-port> -sTCP:LISTEN
+
+Kestrel only suggests commands; it never runs them. Full evidence: --format json

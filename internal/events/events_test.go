@@ -73,6 +73,8 @@ func TestClassifyAttrs(t *testing.T) {
 		{"Error: listen EADDRINUSE: address already in use :::3000", api.EventPortBindFailed, api.SeverityError, 3000, "", true},
 		{"dial tcp 127.0.0.1:5432: connect: connection refused", api.EventDependencyConnFailed, api.SeverityError, 5432, "127.0.0.1:5432", false},
 		{`time=2024-01-01T00:00:00Z level=warn msg="dial tcp 127.0.0.1:6379: connect: connection refused, retrying"`, api.EventDependencyConnFailed, api.SeverityWarn, 6379, "127.0.0.1:6379", true},
+		// Node puts "connect" before ECONNREFUSED; the leftmost alternative must still capture the target.
+		{"Error: connect ECONNREFUSED 127.0.0.1:8080", api.EventDependencyConnFailed, api.SeverityError, 8080, "127.0.0.1:8080", true},
 		{"Could not connect to Redis at 127.0.0.1:6379: Connection refused", api.EventDependencyConnFailed, api.SeverityError, 6379, "127.0.0.1:6379", false},
 		{`INFO panic: boom`, api.EventLogLine, api.SeverityInfo, 0, "", true}, // not at line start: not a panic
 		{"panic: runtime error: index out of range", api.EventLogLine, api.SeverityFatal, 0, "", false},
