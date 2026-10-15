@@ -80,7 +80,15 @@ func clean(b []byte) string {
 		// Progress bars redraw with \r; keep only the final state.
 		s = s[strings.LastIndexByte(s, '\r')+1:]
 	}
-	return strings.ToValidUTF8(s, "�")
+	s = strings.ToValidUTF8(s, "�")
+	// Remaining control characters (bells, stray escapes, backspaces) could
+	// still drive the terminal Kestrel prints to; log text is inert data.
+	return strings.Map(func(r rune) rune {
+		if (r < 0x20 && r != '\t') || r == 0x7f || (r >= 0x80 && r < 0xa0) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // TruncationMarker is appended to lines cut by ReadLines.

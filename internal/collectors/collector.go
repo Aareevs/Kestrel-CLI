@@ -69,21 +69,18 @@ func New(stamper *events.Stamper, sink Sink, opts Options) *Collector {
 	return &Collector{
 		opts:    opts,
 		stamper: stamper,
-		buf:     NewBuffer(opts.MaxEvents, opts.MaxBytes),
+		buf:     NewBuffer(opts.MaxEvents, opts.MaxBytes, stamper.Stamp, overloadEvent),
 		sink:    sink,
 		done:    make(chan struct{}),
 	}
 }
 
-// Run delivers events to the sink until Close has been called and the buffer
-// is drained. Drops are reported as collector_overload events.
+// Run delivers events to the sink, in Seq order, until Close has been called
+// and the buffer is drained. Drops arrive as collector_overload events.
 func (c *Collector) Run() {
 	defer close(c.done)
 	for {
-		ev, dropped, ok := c.buf.Pop()
-		if dropped > 0 {
-			c.sink.Emit(c.overload(dropped))
-		}
+		ev, ok := c.buf.Pop()
 		if !ok {
 			return
 		}
@@ -91,16 +88,13 @@ func (c *Collector) Run() {
 	}
 }
 
-func (c *Collector) overload(dropped int) api.Event {
-	ev := api.Event{
+func overloadEvent() api.Event {
+	return api.Event{
 		Type:     api.EventCollectorOverload,
 		Severity: api.SeverityWarn,
 		Source:   api.SourceKestrel,
 		Message:  "output arrived faster than it could be processed; oldest debug/info lines were dropped (errors and lifecycle events are never dropped)",
-		Attrs:    api.Attrs{Dropped: dropped},
 	}
-	c.stamper.Stamp(&ev)
-	return ev
 }
 
 // Close stops intake. Run returns after delivering what is buffered.
@@ -113,7 +107,9 @@ func (c *Collector) Wait() { <-c.done }
 // probes). Message text is redacted like any other.
 func (c *Collector) Emit(ev api.Event) {
 	ev.Message = c.opts.Redactor.Redact(ev.Message)
-	c.stamper.Stamp(&ev)
+	if ev.Time.IsZero() {
+		ev.Time = c.stamper.Now()
+	}
 	_ = c.buf.Push(ev) // only fails after Close, when nothing is listening
 }
 
@@ -194,7 +190,6 @@ func (d *deduper) add(ev api.Event) {
 		return
 	}
 	d.flushLocked()
-	d.c.stamper.Stamp(&ev)
 	d.first, d.last = &ev, ev.Time
 	_ = d.c.buf.Push(ev)
 }
@@ -224,7 +219,6 @@ func (d *deduper) flushLocked() {
 		sum.Time = d.last
 		sum.Attrs.Repeats = d.repeats
 		sum.Attrs.DurationMS = d.last.Sub(d.first.Time).Milliseconds()
-		d.c.stamper.Stamp(&sum)
 		_ = d.c.buf.Push(sum)
 	}
 	d.first, d.repeats = nil, 0

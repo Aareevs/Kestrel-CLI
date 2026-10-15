@@ -45,32 +45,51 @@ func (q *queue) pop() api.Event {
 // Buffer is a bounded event queue with an explicit backpressure policy:
 //
 //   - When full, the oldest droppable (debug/info log) event is discarded to
-//     make room, and the drop is counted.
+//     make room.
 //   - A droppable event arriving when only protected events fill the buffer is
-//     itself discarded and counted.
+//     itself discarded.
 //   - A protected event arriving when only protected events fill the buffer
 //     blocks the producer until there is room. Blocking the reader stops
 //     draining the child's pipe, which makes the child's own writes block:
 //     backpressure reaches the source instead of data being lost.
 //
-// Events leave in Seq order. Pop reports how many events were dropped since
-// the previous report so the consumer can emit a collector_overload event.
+// Every drop is counted on a collector_overload marker that takes its place
+// in the ordered stream at the first drop and accumulates later drops until
+// it is delivered.
+//
+// Sequence numbers are assigned here, under the lock, at the moment an event
+// is inserted, so delivery order always equals Seq order even with many
+// concurrent producers.
 type Buffer struct {
 	mu        sync.Mutex
 	cond      *sync.Cond
 	drop      queue // droppable events
 	keep      queue // protected events
+	marker    *api.Event
 	bytes     int
 	maxEvents int
 	maxBytes  int
-	dropped   int
 	total     int
 	closed    bool
+
+	stamp    func(*api.Event)
+	overload func() api.Event
 }
 
-// NewBuffer returns a buffer bounded by both event count and approximate bytes.
-func NewBuffer(maxEvents, maxBytes int) *Buffer {
-	b := &Buffer{maxEvents: maxEvents, maxBytes: maxBytes}
+// NewBuffer returns a buffer bounded by both event count and approximate
+// bytes. stamp assigns identity and Seq at insertion; overload builds an
+// unstamped collector_overload event. Either may be nil in tests (events
+// then keep the Seq they arrive with).
+func NewBuffer(maxEvents, maxBytes int, stamp func(*api.Event), overload func() api.Event) *Buffer {
+	if stamp == nil {
+		stamp = func(*api.Event) {}
+	}
+	if overload == nil {
+		overload = func() api.Event {
+			return api.Event{Type: api.EventCollectorOverload, Severity: api.SeverityWarn, Source: api.SourceKestrel}
+		}
+	}
+	b := &Buffer{maxEvents: maxEvents, maxBytes: maxBytes, stamp: stamp, overload: overload}
 	b.cond = sync.NewCond(&b.mu)
 	return b
 }
@@ -78,6 +97,17 @@ func NewBuffer(maxEvents, maxBytes int) *Buffer {
 func (b *Buffer) full(extra int) bool {
 	n := b.drop.len() + b.keep.len()
 	return n > 0 && (n >= b.maxEvents || b.bytes+extra > b.maxBytes)
+}
+
+// countDrop records one discarded event on the pending marker.
+func (b *Buffer) countDrop() {
+	b.total++
+	if b.marker == nil {
+		m := b.overload()
+		b.stamp(&m)
+		b.marker = &m
+	}
+	b.marker.Attrs.Dropped++
 }
 
 // Push adds ev, applying the drop policy. It blocks only for protected events
@@ -96,17 +126,17 @@ func (b *Buffer) Push(ev api.Event) error {
 		if b.drop.len() > 0 {
 			old := b.drop.pop()
 			b.bytes -= eventCost(&old)
-			b.dropped++
-			b.total++
+			b.countDrop()
 			continue
 		}
 		if Droppable(&ev) {
-			b.dropped++
-			b.total++
+			b.countDrop()
+			b.cond.Broadcast()
 			return nil
 		}
 		b.cond.Wait()
 	}
+	b.stamp(&ev)
 	if Droppable(&ev) {
 		b.drop.push(ev)
 	} else {
@@ -117,35 +147,41 @@ func (b *Buffer) Push(ev api.Event) error {
 	return nil
 }
 
-// Pop blocks until an event is available and returns it with the number of
-// events dropped since the last Pop that reported drops. ok is false once the
-// buffer is closed and empty.
-func (b *Buffer) Pop() (ev api.Event, dropped int, ok bool) {
+// Pop blocks until an event is available and returns the one with the lowest
+// Seq. ok is false once the buffer is closed and empty.
+func (b *Buffer) Pop() (ev api.Event, ok bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for b.drop.len()+b.keep.len() == 0 {
+	for b.drop.len()+b.keep.len() == 0 && b.marker == nil {
 		if b.closed {
-			dropped, b.dropped = b.dropped, 0
-			return api.Event{}, dropped, false
+			return api.Event{}, false
 		}
 		b.cond.Wait()
 	}
-	var q *queue
-	switch {
-	case b.drop.len() == 0:
-		q = &b.keep
-	case b.keep.len() == 0:
-		q = &b.drop
-	case b.drop.peek().Seq < b.keep.peek().Seq:
-		q = &b.drop
-	default:
-		q = &b.keep
+	var best *api.Event
+	var from *queue
+	consider := func(e *api.Event, q *queue) {
+		if best == nil || e.Seq < best.Seq {
+			best, from = e, q
+		}
 	}
-	ev = q.pop()
-	b.bytes -= eventCost(&ev)
-	dropped, b.dropped = b.dropped, 0
+	if b.drop.len() > 0 {
+		consider(b.drop.peek(), &b.drop)
+	}
+	if b.keep.len() > 0 {
+		consider(b.keep.peek(), &b.keep)
+	}
+	if b.marker != nil {
+		consider(b.marker, nil)
+	}
+	if from == nil {
+		ev, b.marker = *b.marker, nil
+	} else {
+		ev = from.pop()
+		b.bytes -= eventCost(&ev)
+	}
 	b.cond.Broadcast()
-	return ev, dropped, true
+	return ev, true
 }
 
 // Close stops accepting events; Pop drains what remains.

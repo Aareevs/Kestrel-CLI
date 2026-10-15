@@ -19,6 +19,7 @@ func TestReadLines(t *testing.T) {
 		"progress 10%\rprogress 50%\rprogress 100%\n" +
 		long + "\n" +
 		"bad \xff utf8\n" +
+		"bell\x07 and \x1bZ stray escape\x08\n" +
 		"no newline at end"
 	type got struct {
 		line  string
@@ -34,6 +35,7 @@ func TestReadLines(t *testing.T) {
 		{"progress 100%", 0},
 		{strings.Repeat("x", 64), 36},
 		{"bad � utf8", 0},
+		{"bell and Z stray escape", 0},
 		{"no newline at end", 0},
 	}
 	if len(lines) != len(want) {
@@ -41,7 +43,7 @@ func TestReadLines(t *testing.T) {
 	}
 	for i := range want {
 		if lines[i] != want[i] {
-			t.Errorf("line %d = %+v, want %+v", i, lines[i], want[i])
+			t.Errorf("line %d = %q (%d), want %q (%d)", i, lines[i].line, lines[i].trunc, want[i].line, want[i].trunc)
 		}
 	}
 }
@@ -62,31 +64,46 @@ func ev(seq uint64, sev api.Severity, typ api.EventType) api.Event {
 	return api.Event{Seq: seq, Severity: sev, Type: typ, Message: fmt.Sprint(seq)}
 }
 
+// seqStamper numbers events in insertion order, like the real Stamper.
+func seqStamper() func(*api.Event) {
+	var n uint64
+	return func(e *api.Event) { n++; e.Seq = n }
+}
+
+// drain pops everything, returning messages of real events and the total
+// drops reported by overload markers.
+func drain(b *Buffer) (msgs []string, dropped int) {
+	for {
+		e, ok := b.Pop()
+		if !ok {
+			return
+		}
+		if e.Type == api.EventCollectorOverload {
+			dropped += e.Attrs.Dropped
+			msgs = append(msgs, fmt.Sprintf("overload(%d)", e.Attrs.Dropped))
+			continue
+		}
+		msgs = append(msgs, e.Message)
+	}
+}
+
 func TestBufferDropsOldestInfoFirst(t *testing.T) {
-	b := NewBuffer(3, 1<<20)
+	b := NewBuffer(3, 1<<20, seqStamper(), nil)
 	b.Push(ev(1, api.SeverityInfo, api.EventLogLine))
 	b.Push(ev(2, api.SeverityError, api.EventLogLine))
 	b.Push(ev(3, api.SeverityInfo, api.EventLogLine))
 	b.Push(ev(4, api.SeverityInfo, api.EventLogLine))  // evicts 1
 	b.Push(ev(5, api.SeverityDebug, api.EventLogLine)) // evicts 3
 	b.Close()
-	var seqs []uint64
-	total := 0
-	for {
-		e, d, ok := b.Pop()
-		total += d
-		if !ok {
-			break
-		}
-		seqs = append(seqs, e.Seq)
-	}
-	if fmt.Sprint(seqs) != "[2 4 5]" || total != 2 {
-		t.Fatalf("got %v, dropped %d", seqs, total)
+	// The overload marker sits where the first drop happened (before 4).
+	msgs, dropped := drain(b)
+	if fmt.Sprint(msgs) != "[2 overload(2) 4 5]" || dropped != 2 {
+		t.Fatalf("got %v, dropped %d", msgs, dropped)
 	}
 }
 
 func TestBufferNeverDropsProtected(t *testing.T) {
-	b := NewBuffer(2, 1<<20)
+	b := NewBuffer(2, 1<<20, seqStamper(), nil)
 	b.Push(ev(1, api.SeverityError, api.EventLogLine))
 	b.Push(ev(2, api.SeverityInfo, api.EventProcessExited)) // lifecycle: protected despite info
 	// Full of protected events: an info line is dropped itself...
@@ -102,27 +119,19 @@ func TestBufferNeverDropsProtected(t *testing.T) {
 		t.Fatal("protected push should block while the buffer is full of protected events")
 	case <-time.After(50 * time.Millisecond):
 	}
-	e, dropped, _ := b.Pop()
-	if e.Seq != 1 || dropped != 1 {
-		t.Fatalf("pop = %d, dropped %d", e.Seq, dropped)
+	if e, _ := b.Pop(); e.Message != "1" {
+		t.Fatalf("first pop = %q", e.Message)
 	}
 	<-pushed
 	b.Close()
-	var seqs []uint64
-	for {
-		e, _, ok := b.Pop()
-		if !ok {
-			break
-		}
-		seqs = append(seqs, e.Seq)
-	}
-	if fmt.Sprint(seqs) != "[2 4]" {
-		t.Fatalf("remaining %v", seqs)
+	msgs, dropped := drain(b)
+	if fmt.Sprint(msgs) != "[2 overload(1) 4]" || dropped != 1 {
+		t.Fatalf("remaining %v, dropped %d", msgs, dropped)
 	}
 }
 
 func TestBufferCloseUnblocksProducer(t *testing.T) {
-	b := NewBuffer(1, 1<<20)
+	b := NewBuffer(1, 1<<20, nil, nil)
 	b.Push(ev(1, api.SeverityError, api.EventLogLine))
 	errc := make(chan error)
 	go func() { errc <- b.Push(ev(2, api.SeverityError, api.EventLogLine)) }()
@@ -134,7 +143,7 @@ func TestBufferCloseUnblocksProducer(t *testing.T) {
 }
 
 func TestBufferByteBound(t *testing.T) {
-	b := NewBuffer(1000, 2000)
+	b := NewBuffer(1000, 2000, seqStamper(), nil)
 	big := strings.Repeat("z", 900)
 	for i := 1; i <= 10; i++ {
 		e := ev(uint64(i), api.SeverityInfo, api.EventLogLine)
