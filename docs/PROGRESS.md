@@ -1,13 +1,15 @@
 # Progress
 
-## Release preparation: v1.0.0 (2026-10-16)
+## Release: v1.0.0 (2026-10-16)
 
-Windows support and full cross-platform CI matrix merged to `main` via PR #9. Release readiness validated across all target platforms (macOS arm64/amd64, Linux arm64/amd64, Windows amd64).
+Official `v1.0.0` release published on GitHub with multi-arch binary assets and updated Homebrew tap formula.
 
-### Changes
-- **README:** Promoted Homebrew (`brew install aareevs/tap/kestrel`) and the curl one-liner to primary install methods; removed pre-release warning note; updated badges and platform support matrix.
-- **Workflow Step Organization:** Cleaned up and added descriptive step names in `release.yml` and `homebrew.yml`.
-- **Validation:** Full dry runs verified via `make release-check` and `make release-snapshot`. All tests pass locally and in CI across Ubuntu, macOS, and Windows.
+### Highlights
+- **Command Shortcuts & Aliases:** Added CLI shortcuts (`w`, `diag`, `tl`, `v`, `ins`, `r`, `s`, `sess`, `doc`, `ver`) and `-j` / `--json` universal shorthand.
+- **Windows Support:** Full cross-platform support with native Windows Job Objects, command normalization, and `scripts/install.ps1` installer.
+- **Homebrew Tap:** Formula rendered and published to `Aareevs/homebrew-tap` (`brew install aareevs/tap/kestrel`).
+- **Release Assets:** Prebuilt static archives (`darwin_arm64`, `darwin_amd64`, `linux_arm64`, `linux_amd64`, `windows_amd64`) with SHA-256 `checksums.txt`.
+- **Streamlined README:** Clean, fast-reading layout inspired by Octo-CLI with unified platform badges and dedicated shortcuts table.
 
 ## Follow-up: Windows test harness and CI runner (2026-10-15)
 
