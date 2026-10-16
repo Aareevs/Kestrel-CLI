@@ -63,6 +63,29 @@ release:
     name: Kestrel-CLI
   draft: true
   replace_existing_draft: true
+  name_template: "Release {{ .Tag }}"
+  header: |
+    **Kestrel** is an open-source, local-first incident intelligence engine designed to eliminate debugging guesswork across multi-service development stacks. Built in Go, it supervises microservices in isolated process groups, reconstructs the causal chain when components break, ranks root-cause hypotheses with immutable event evidence, and proves that fixes remain stable over time.
+
+    - **Process Isolation & Containment:** Zero orphan processes on `Ctrl-C` via POSIX Process Groups (macOS/Linux) and native Windows Job Objects.
+    - **Graph-Based Root-Cause Correlation:** Separates initiating faults from cascading downstream connection refusals using declared dependency graphs and socket traffic attribution.
+    - **Continuous Fix Verification:** Samples service probes across a continuous 30-second stability window with relapse detection before declaring an issue resolved.
+    - **Leak-Free Memory Bounding:** Bounded ring buffers and compressed log segments safely handle 50 MB/min log floods with explicit drop accounting.
+    - **Zero-Trust Privacy & Redaction:** All API tokens, JWTs, headers, and database credentials are automatically sanitized before display or storage.
+    - **AI Agent Companion (MCP):** Native read-only Model Context Protocol server over stdio for Claude Code, Cursor, and VS Code.
+
+    ### Installation
+
+    ```bash
+    # Homebrew (macOS & Linux)
+    brew install aareevs/tap/kestrel
+
+    # Curl one-liner (macOS & Linux)
+    curl -fsSL https://raw.githubusercontent.com/Aareevs/Kestrel-CLI/main/scripts/install.sh | sh
+
+    # PowerShell one-liner (Windows)
+    irm https://raw.githubusercontent.com/Aareevs/Kestrel-CLI/main/scripts/install.ps1 | iex
+    ```
 
 # The Homebrew formula is not generated here (GoReleaser v2 only offers
 # deprecated `brews` for formulas). scripts/homebrew-formula.sh renders it from
