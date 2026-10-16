@@ -9,7 +9,8 @@
 
 <p align="center">
   <a href="https://github.com/Aareevs/Kestrel-CLI/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Aareevs/Kestrel-CLI/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI&labelColor=18181b" alt="CI" /></a>
-  <a href="https://github.com/Aareevs/Kestrel-CLI/releases"><img src="https://img.shields.io/github/v/release/Aareevs/Kestrel-CLI?style=flat-square&logo=github&logoColor=white&label=Release&labelColor=18181b&color=2563eb&include_prereleases" alt="Release" /></a>
+  <a href="https://github.com/Aareevs/Kestrel-CLI/releases"><img src="https://img.shields.io/github/v/release/Aareevs/Kestrel-CLI?style=flat-square&logo=github&logoColor=white&label=Release&labelColor=18181b&color=2563eb" alt="Release" /></a>
+  <a href="https://github.com/Aareevs/homebrew-tap"><img src="https://img.shields.io/badge/Homebrew-aareevs%2Ftap-f59e0b?style=flat-square&logo=homebrew&logoColor=white&labelColor=18181b" alt="Homebrew" /></a>
   <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white&labelColor=18181b" alt="Go 1.26" /></a>
   <a href="#ai-agent-companion-kestrel-mcp"><img src="https://img.shields.io/badge/MCP-read--only-52525b?style=flat-square&logo=anthropic&logoColor=white&labelColor=18181b" alt="MCP read-only" /></a>
   <img src="https://img.shields.io/badge/macOS-27272a?style=flat-square&logo=apple&logoColor=white" alt="macOS" />
@@ -38,43 +39,38 @@ Kestrel watches the services in your local stack, reconstructs what broke and in
 hypotheses backed by the exact events that support them, and verifies whether your fix held. It runs offline,
 needs no config to start, never uploads anything, and never runs a command you didn't ask for.
 
-> [!NOTE]
-> **Kestrel is pre-release.** Everything described here works and is tested. No release has been published yet,
-> so for now install with `go install` or from source. The one-line installer and Homebrew start working with the
-> first release. Every output in this README comes from a real run.
-
 ---
 
 ## Quick Install
 
-### Today: Go install (any platform with Go 1.26+)
+### Homebrew (macOS, Linux)
 ```bash
-go install github.com/Aareevs/Kestrel-CLI/cmd/kestrel@latest
+brew install aareevs/tap/kestrel
 ```
 
-### Today: from source
-```bash
-git clone https://github.com/Aareevs/Kestrel-CLI
-cd Kestrel-CLI
-make build        # → ./bin/kestrel
-```
-
-### From the first release: one-line install (macOS, Linux)
+### One-line installer (macOS, Linux)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Aareevs/Kestrel-CLI/main/scripts/install.sh | sh
 ```
 Downloads the archive for your platform, **verifies its SHA-256 checksum** (and installs nothing if it doesn't
 match), and puts `kestrel` in `~/.local/bin`. No `sudo`, no shell-profile edits. Pin a version with
-`KESTREL_VERSION=v0.1.0`, or choose a directory with `KESTREL_INSTALL_DIR`.
+`KESTREL_VERSION=v1.0.0`, or choose a directory with `KESTREL_INSTALL_DIR`.
 
-### From the first release: Homebrew
+### Prebuilt binaries (Windows, macOS, Linux)
+Prebuilt archives for macOS (Apple Silicon, Intel), Linux (x86_64, ARM64), and Windows (x64) with SHA-256 checksums are available on the
+[Releases page](https://github.com/Aareevs/Kestrel-CLI/releases).
+
+### Go install (any platform with Go 1.26+)
 ```bash
-brew install aareevs/tap/kestrel
+go install github.com/Aareevs/Kestrel-CLI/cmd/kestrel@latest
 ```
 
-Prebuilt archives for macOS (Apple Silicon, Intel), Linux (x86_64, ARM64), and Windows (x64) will be on the
-[Releases page](https://github.com/Aareevs/Kestrel-CLI/releases). The release tooling is built and tested
-locally ([docs/releasing.md](docs/releasing.md)).
+### Build from source
+```bash
+git clone https://github.com/Aareevs/Kestrel-CLI
+cd Kestrel-CLI
+make build        # → ./bin/kestrel
+```
 
 ---
 
@@ -559,7 +555,7 @@ Threat model and limits: [docs/security.md](docs/security.md).
 | Supervision (process groups, clean Ctrl-C) | ✅ tested | ✅ tested | ✅ tested (Job Objects) |
 | Services survive `kill -9` of Kestrel? | can (no parent-death signal on macOS) | no (`Pdeathsig`) | no (job closes) |
 | `verify` command checks | ✅ tested | ✅ tested | ✅ tested (`cmd.exe /C`) |
-| Install script / Homebrew | from the first release | from the first release | download the `.zip` |
+| Install script / Homebrew | ✅ (formula & curl) | ✅ (formula & curl) | download the `.zip` |
 
 Binaries are static (pure-Go SQLite, no cgo). Windows is tested across all packages in CI via native Job Objects
 containment and `cmd.exe` process trees (Go's `-race` detector is skipped on Windows runners). They are not notarized for macOS; see

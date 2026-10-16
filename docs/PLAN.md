@@ -20,7 +20,7 @@ we are executing it, the decisions made along the way, and the risks we are watc
 | 4 | Correlation + diagnosis: graph, incidents, timeline, rule engine, `timeline`, `diagnose` | Scenarios A, B, C, D, I golden; every hypothesis has evidence IDs | done (see PROGRESS.md) |
 | 5 | Verification: `verify`, stability window, authorized exec, before/after | Scenario E; exec refused without authorization (tested) | done (see PROGRESS.md) |
 | 6 | MCP server (read-only, reuses `internal/app`) | test client retrieves real diagnosis; redaction verified | done (see PROGRESS.md) |
-| 7 | Hardening + release: Scenarios F, G, H, J; GoReleaser; install script; tap; final README | `goreleaser release --snapshot --clean` succeeds | done, not released (see PROGRESS.md) |
+| 7 | Hardening + release: Scenarios F, G, H, J; GoReleaser; install script; tap; final README | `goreleaser release --snapshot --clean` succeeds | done, v1.0.0 ready (see PROGRESS.md) |
 
 ## Phase 1 breakdown
 
@@ -142,7 +142,7 @@ we are executing it, the decisions made along the way, and the risks we are watc
   by never pretending a guess is a fact.
 - The hand-written `.gitignore` matcher does not implement every corner of git's semantics (documented).
 - Go 1.26 vs. staticcheck release compatibility; CI pins a version and we record what actually ran.
-- Windows Job Objects (Phase 2) cannot be exercised on this macOS machine; only cross-compiled. The same goes for
-  `verify` command checks on Windows (`cmd.exe /C`, Job Object stop on timeout).
+- Windows Job Objects (Phase 2), process supervision, and `verify` command checks (`cmd.exe /C`) are fully
+  exercised and validated in CI on native `windows-latest` runners.
 - Timing-sensitive integration tests. Mitigated by waiting on events and on stored state rather than sleeping, by
   ordering scenarios causally, and by repeated runs under CPU load at every phase gate.
