@@ -21,8 +21,9 @@ func newVerifyCmd(g *globals) *cobra.Command {
 		o         app.VerifyOptions
 	)
 	cmd := &cobra.Command{
-		Use:   "verify [id|last]",
-		Short: "Check whether a fix worked: probes across a stability window, before/after comparison",
+		Use:     "verify [id|last]",
+		Aliases: []string{"v", "check"},
+		Short:   "Check whether a fix worked: probes across a stability window, before/after comparison",
 		Long: "Re-checks the services involved in a recorded session's latest incident (or --incident N):\n" +
 			"their health probes, the addresses they failed to reach, and (while 'kestrel watch' is still running)\n" +
 			"whether their errors keep occurring. Every check is sampled across --window; one lucky probe is not\n" +

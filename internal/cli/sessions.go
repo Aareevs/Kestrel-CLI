@@ -32,8 +32,9 @@ func newSessionsCmd(g *globals) *cobra.Command {
 		limit int
 	)
 	cmd := &cobra.Command{
-		Use:   "sessions",
-		Short: "List, show, export, or delete recorded sessions",
+		Use:     "sessions",
+		Aliases: []string{"sess"},
+		Short:   "List, show, export, or delete recorded sessions",
 		Long: "Every 'kestrel run' and 'kestrel watch' is recorded locally. Sessions are referenced by full ID,\n" +
 			"a unique prefix, or 'last'. By default only this project's sessions are considered; use --all for every project.",
 	}

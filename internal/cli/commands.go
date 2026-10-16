@@ -26,8 +26,9 @@ func inspectFlags(cmd *cobra.Command, o *app.InspectOptions) {
 func newInspectCmd(g *globals) *cobra.Command {
 	var o app.InspectOptions
 	cmd := &cobra.Command{
-		Use:   "inspect",
-		Short: "Detect technologies and service candidates (reads files only)",
+		Use:     "inspect",
+		Aliases: []string{"ins", "info"},
+		Short:   "Detect technologies and service candidates (reads files only)",
 		Long: "Scan the project and report detected technologies and probable services, each with its\n" +
 			"start command, port, health probe, dependencies, the file that said so, and a confidence.\n" +
 			"Discovery never executes project scripts.",
@@ -244,9 +245,10 @@ func configErr(err error) error {
 
 func newDoctorCmd(g *globals) *cobra.Command {
 	return &cobra.Command{
-		Use:   "doctor",
-		Short: "Check that Kestrel can run here: platform, data directory, config, tools",
-		Args:  cobra.NoArgs,
+		Use:     "doctor",
+		Aliases: []string{"doc"},
+		Short:   "Check that Kestrel can run here: platform, data directory, config, tools",
+		Args:    cobra.NoArgs,
 		RunE: runE(func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
@@ -270,9 +272,10 @@ func newDoctorCmd(g *globals) *cobra.Command {
 
 func newVersionCmd(g *globals) *cobra.Command {
 	return &cobra.Command{
-		Use:   "version",
-		Short: "Print version information",
-		Args:  cobra.NoArgs,
+		Use:     "version",
+		Aliases: []string{"ver"},
+		Short:   "Print version information",
+		Args:    cobra.NoArgs,
 		RunE: runE(func(_ *cobra.Command, _ []string) error {
 			v := buildinfo.Info()
 			if g.json() {
