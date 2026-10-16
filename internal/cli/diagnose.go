@@ -13,8 +13,9 @@ import (
 func newDiagnoseCmd(g *globals) *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{
-		Use:   "diagnose [id|last]",
-		Short: "Ranked, evidence-backed hypotheses for each incident in a session",
+		Use:     "diagnose [id|last]",
+		Aliases: []string{"diag"},
+		Short:   "Ranked, evidence-backed hypotheses for each incident in a session",
 		Long: "Correlates a recorded session (the latest by default) into incidents and proposes ranked hypotheses.\n" +
 			"Each cites the events that support and contradict it, states its confidence and why, and suggests\n" +
 			"one next step for you to run. Kestrel never runs it.\n\n" +
@@ -68,8 +69,9 @@ func newTimelineCmd(g *globals) *cobra.Command {
 		limit   int
 	)
 	cmd := &cobra.Command{
-		Use:   "timeline [id|last]",
-		Short: "Incident timelines: last healthy state, first anomaly, symptoms, recovery",
+		Use:     "timeline [id|last]",
+		Aliases: []string{"tl", "time"},
+		Short:   "Incident timelines: last healthy state, first anomaly, symptoms, recovery",
 		Long: "Shows each incident in a recorded session (the latest by default) in order: last known healthy state,\n" +
 			"first anomaly, key events, downstream symptoms, and recovery, with repeats collapsed.\n" +
 			"With --service, also shows everything that service printed (most recent first, up to --limit).",

@@ -1,5 +1,14 @@
 # Progress
 
+## Release preparation: v1.0.0 (2026-10-16)
+
+Windows support and full cross-platform CI matrix merged to `main` via PR #9. Release readiness validated across all target platforms (macOS arm64/amd64, Linux arm64/amd64, Windows amd64).
+
+### Changes
+- **README:** Promoted Homebrew (`brew install aareevs/tap/kestrel`) and the curl one-liner to primary install methods; removed pre-release warning note; updated badges and platform support matrix.
+- **Workflow Step Organization:** Cleaned up and added descriptive step names in `release.yml` and `homebrew.yml`.
+- **Validation:** Full dry runs verified via `make release-check` and `make release-snapshot`. All tests pass locally and in CI across Ubuntu, macOS, and Windows.
+
 ## Follow-up: Windows test harness and CI runner (2026-10-15)
 
 Windows supervision (`proc_windows.go`) was implemented with Job Objects and console break events, but was untested because integration test suites carried `//go:build !windows` and CI only ran on Ubuntu and macOS.

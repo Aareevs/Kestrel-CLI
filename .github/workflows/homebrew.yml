@@ -15,8 +15,10 @@ jobs:
   formula:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: render the formula from the published checksums
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Render Homebrew Formula
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
@@ -24,7 +26,8 @@ jobs:
           gh release download "$TAG" --pattern checksums.txt --dir /tmp/rel
           scripts/homebrew-formula.sh "$TAG" /tmp/rel/checksums.txt > /tmp/kestrel.rb
           ruby -c /tmp/kestrel.rb
-      - name: push it to the tap
+
+      - name: Push Formula to Tap Repository
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAG: ${{ github.event.release.tag_name }}

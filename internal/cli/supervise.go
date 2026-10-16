@@ -30,8 +30,9 @@ func newRunCmd(g *globals) *cobra.Command {
 		grace time.Duration
 	)
 	cmd := &cobra.Command{
-		Use:   "run [flags] -- <command> [args...]",
-		Short: "Run a command under Kestrel with no config: capture, classify, probe, record",
+		Use:     "run [flags] -- <command> [args...]",
+		Aliases: []string{"r"},
+		Short:   "Run a command under Kestrel with no config: capture, classify, probe, record",
 		Long: "Wrap one command (or several with --svc). Kestrel captures and classifies its output, redacts\n" +
 			"secrets, probes any port it announces, and stops its whole process tree on Ctrl-C.\n\n" +
 			"Examples:\n" +
@@ -71,8 +72,9 @@ func newRunCmd(g *globals) *cobra.Command {
 func newWatchCmd(g *globals) *cobra.Command {
 	var grace time.Duration
 	cmd := &cobra.Command{
-		Use:   "watch [service...]",
-		Short: "Supervise configured services (and their dependencies) with live status",
+		Use:     "watch [service...]",
+		Aliases: []string{"w", "start"},
+		Short:   "Supervise configured services (and their dependencies) with live status",
 		Long: "Start the services from kestrel.yaml in dependency order (all of them, or the ones named plus\n" +
 			"what they depend on), stream their classified output, and report readiness changes.\n" +
 			"Services without a command are probed only, never started. Ctrl-C stops everything Kestrel started.",
@@ -149,9 +151,10 @@ func (f sinkFunc) Emit(ev api.Event) { f(ev) }
 
 func newStatusCmd(g *globals) *cobra.Command {
 	return &cobra.Command{
-		Use:   "status",
-		Short: "Liveness and readiness per service (live session, or a one-off probe of kestrel.yaml)",
-		Args:  cobra.NoArgs,
+		Use:     "status",
+		Aliases: []string{"s", "stat"},
+		Short:   "Liveness and readiness per service (live session, or a one-off probe of kestrel.yaml)",
+		Args:    cobra.NoArgs,
 		RunE: runE(func(cmd *cobra.Command, _ []string) error {
 			a, err := g.app()
 			if err != nil {
