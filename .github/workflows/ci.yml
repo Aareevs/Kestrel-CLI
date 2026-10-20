@@ -1,9 +1,22 @@
 name: ci
 
+# Docs-only changes don't change behavior, so they skip the test matrix.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/assets/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/pull_request_template.md"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/assets/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/pull_request_template.md"
 
 permissions:
   contents: read
