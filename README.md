@@ -191,6 +191,13 @@ claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 
 ---
 
+## Contributing
+
+Contributions are welcome: error patterns, diagnosis rules, ecosystems for `inspect`, and bug reports. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) first (it has the design rules and how to add each kind of thing), and follow
+the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately, as described in
+[SECURITY.md](SECURITY.md).
+
 ## License
 
 MIT License. Copyright (c) 2026 Aareevs. See [LICENSE](LICENSE) for details.

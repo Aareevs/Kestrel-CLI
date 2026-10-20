@@ -1,8 +1,8 @@
 # Releasing
 
-Kestrel is released with [GoReleaser](https://goreleaser.com) v2 (pinned to v2.18.2). **No release has been
-published yet.** Everything below has been tested locally as a snapshot, which builds every artifact and
-publishes nothing.
+Kestrel is released with [GoReleaser](https://goreleaser.com) v2 (pinned to v2.18.2). v1.0.0 was published on
+2026-10-16. You can dry-run everything below locally as a snapshot, which builds every artifact and publishes
+nothing.
 
 ## What a release produces
 

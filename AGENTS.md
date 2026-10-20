@@ -15,10 +15,12 @@ conversation.
   5. Never commit phase work straight to `main`. Small fixes may go direct only when the owner asks.
 - **No AI attribution.** Never add a `Co-Authored-By: Claude …` (or any AI co-author) trailer to commits, and never
   put "🤖 Generated with Claude Code" or similar in PR descriptions.
-- **No release yet.** Release tooling exists (GoReleaser, `scripts/install.sh`, the Homebrew formula script, `release.yml`, `homebrew.yml`),
-  but the owner doesn't want a release. Never push tags, create GitHub releases or drafts, create or push the
-  Homebrew tap, or trigger publishing workflows without explicit go-ahead. Dry runs (`make release-snapshot`) are
-  fine.
+- **Releases are the owner's call.** v1.0.0 was published on 2026-10-16 by the owner. Never push tags, create
+  GitHub releases or drafts, push to the Homebrew tap, or trigger publishing workflows without explicit go-ahead.
+  Dry runs (`make release-snapshot`) are fine.
+- **Mind CI minutes.** The owner has no Actions credits to spare. CI skips docs-only changes (`paths-ignore`
+  in `ci.yml`). For other pushes that shouldn't run CI, put `[skip ci]` in the commit message (and in the merge
+  subject when merging a PR). Don't re-run workflows without asking.
 
 ## Working rules
 
