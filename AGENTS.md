@@ -16,9 +16,9 @@ conversation.
 - **Releases are the owner's call.** v1.0.0 was published on 2026-10-16 by the owner. Never push tags, create
   GitHub releases or drafts, push to the Homebrew tap, or trigger publishing workflows without explicit go-ahead.
   Dry runs (`make release-snapshot`) are fine.
-- **Mind CI minutes.** The owner has no Actions credits to spare. CI skips docs-only changes (`paths-ignore`
-  in `ci.yml`). For other pushes that shouldn't run CI, put `[skip ci]` in the commit message (and in the merge
-  subject when merging a PR). Don't re-run workflows without asking.
+- **Keep CI usage low.** CI skips docs-only changes (`paths-ignore` in `ci.yml`). For other pushes that
+  shouldn't run CI, put `[skip ci]` in the commit message (and in the merge subject when merging a PR). Don't
+  re-run workflows without asking.
 
 ## Working rules
 
