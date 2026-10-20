@@ -13,8 +13,6 @@ conversation.
      `area: …`, `security`, `needs: windows-testing`, …), and attach them.
   4. Wait for CI to pass, then merge with `gh pr merge --merge` (a merge commit keeps the individual commits).
   5. Never commit phase work straight to `main`. Small fixes may go direct only when the owner asks.
-- **No AI attribution.** Never add a `Co-Authored-By: Claude …` (or any AI co-author) trailer to commits, and never
-  put "🤖 Generated with Claude Code" or similar in PR descriptions.
 - **Releases are the owner's call.** v1.0.0 was published on 2026-10-16 by the owner. Never push tags, create
   GitHub releases or drafts, push to the Homebrew tap, or trigger publishing workflows without explicit go-ahead.
   Dry runs (`make release-snapshot`) are fine.
