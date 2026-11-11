@@ -145,7 +145,7 @@ and that a missing version fails cleanly.
 `tests/integration/mcp_test.go` connects the official Go SDK client to the real `kestrel mcp` binary over stdio
 (`TestMCPRealDiagnosisAndRedaction`, the Phase 6 exit criterion). It checks:
 
-- **Tools:** exactly the eight documented tools exist, each read-only, closed-world, and with an output schema.
+- **Tools:** exactly the eleven documented tools exist, each read-only, closed-world, and with an output schema.
 - **Real diagnosis:** `get_diagnosis` returns the same incidents, rules, confidences, and leading evidence IDs as
   `kestrel diagnose --format json`.
 - **Every tool works** on a recorded session that contains fake secrets and hostile lines.
