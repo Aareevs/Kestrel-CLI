@@ -423,3 +423,45 @@ func TestEveryCommandRedactsWithTodaysRules(t *testing.T) {
 		t.Errorf("expected a placeholder:\n%s", tl)
 	}
 }
+
+func TestSchemaCommand(t *testing.T) {
+	// Lists the schemas.
+	r := run(t, t.TempDir(), nil, "schema", "--no-color")
+	for _, want := range []string{"diagnose", "timeline", "verify"} {
+		if r.code != 0 || !strings.Contains(r.stdout, want) {
+			t.Fatalf("schema list: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+		}
+	}
+	// Prints each one: exactly the published file, valid JSON, a 2020-12 schema.
+	for _, name := range []string{"diagnose", "timeline", "verify"} {
+		r := run(t, t.TempDir(), nil, "schema", name)
+		file, err := os.ReadFile(filepath.Join("..", "..", "docs", "schemas", name+".schema.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var s map[string]any
+		if r.code != 0 || r.stdout != string(file) || json.Unmarshal([]byte(r.stdout), &s) != nil || s["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
+			t.Errorf("schema %s: exit %d, matches file: %v", name, r.code, r.stdout == string(file))
+		}
+	}
+	// An unknown name is a usage error that says what exists.
+	if r := run(t, t.TempDir(), nil, "schema", "inspect"); r.code != 2 || !strings.Contains(r.stderr, "diagnose, timeline, verify") {
+		t.Errorf("unknown schema: exit %d\n%s", r.code, r.stderr)
+	}
+	// And the output of the real commands validates against what it prints.
+	home, project := twoIncidents(t)
+	for _, c := range []struct {
+		schema string
+		args   []string
+	}{
+		{"diagnose", []string{"diagnose", "--json"}}, {"diagnose", []string{"diagnose", "--json", "-I", "2"}},
+		{"timeline", []string{"timeline", "--json"}}, {"timeline", []string{"timeline", "--json", "-I", "1"}},
+		{"timeline", []string{"timeline", "--json", "--service", "second"}}, {"timeline", []string{"timeline", "--json", "--since", "1h"}},
+	} {
+		_, out, errs := kestrelCmd(t, home, project, c.args...)
+		if out == "" {
+			t.Fatalf("%v printed nothing: %s", c.args, errs)
+		}
+		validateSchema(t, c.schema, out)
+	}
+}

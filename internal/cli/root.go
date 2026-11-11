@@ -227,6 +227,7 @@ func newRoot(s Streams) (*cobra.Command, *globals) {
 		newSessionsCmd(g),
 		newCleanupCmd(g),
 		newConfigCmd(g),
+		newSchemaCmd(g),
 		newDoctorCmd(g),
 		newVersionCmd(g),
 	)

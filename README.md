@@ -99,6 +99,17 @@ In a terminal, `kestrel watch` holds a small table of your services at the top o
 
 It is only used when output is a terminal with room for it (about 50 columns and the table plus 6 rows). Piped output, `--json`, `--quiet`, `TERM=dumb`, a small window, and Windows get the plain log stream, and `--plain` turns it off anywhere. `kestrel run` never pins a table.
 
+### JSON output and its schemas
+
+`kestrel diagnose`, `timeline` and `verify` print a stable report with `--json`. Each has a JSON Schema (draft 2020-12) in [`docs/schemas/`](docs/schemas), and `kestrel schema <diagnose|timeline|verify>` prints the same file from the installed binary, for validating the output in a script or CI, or generating types:
+
+```bash
+kestrel schema verify > verify.schema.json
+kestrel verify --json | check-jsonschema --schemafile verify.schema.json -
+```
+
+The schemas are generated from the Go types, and the tests check that real output from every scenario validates against them. They allow extra properties, so a field added in a later release won't break an older copy. See [docs/schemas/README.md](docs/schemas/README.md).
+
 ### Command & Flag Shortcuts
 
 | Quick Command | Full Command | Description |

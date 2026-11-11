@@ -27,6 +27,7 @@ func verifyJSON(t *testing.T, home, project string, args ...string) (int, api.Ve
 	if code != 0 && code != 1 && code != 3 {
 		t.Fatalf("verify exit %d\n%s\n%s", code, out, errs)
 	}
+	validateSchema(t, "verify", out)
 	return code, decode[api.VerificationReport](t, out), took
 }
 

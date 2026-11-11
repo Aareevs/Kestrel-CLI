@@ -140,6 +140,15 @@ end to end:
 against it via `file://`. It checks the happy path, that a tampered archive is refused (and nothing installed),
 and that a missing version fails cleanly.
 
+## Schema tests
+
+`internal/schemas` generates `docs/schemas/*.schema.json` from `pkg/api`; `TestCommittedSchemasAreCurrent` fails
+when the committed files differ from the types (regenerate with `make schemas`). `validateSchema` in
+`tests/integration/schema_test.go` validates the JSON the real binary prints against those files: every incident
+scenario (`diagnose`, `timeline`, `timeline --service`), every `verify` test, and the `-I`/`--service`/`--since`
+variants (`TestSchemaCommand`). `TestSchemaCommand` also checks that `kestrel schema <name>` prints exactly the
+committed file.
+
 ## MCP tests
 
 `tests/integration/mcp_test.go` connects the official Go SDK client to the real `kestrel mcp` binary over stdio
