@@ -178,8 +178,9 @@ claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 | **Rust**: axum, actix-web, rocket, warp | `Cargo.toml`, `src/main.rs` | Standard |
 
 Detection (above) is separate from diagnosis: `kestrel diagnose` recognizes failures from the output itself, whatever
-the stack. That includes Java and Kotlin (Spring Boot startup and port failures, JDBC connection errors, missing
-classes, Maven/Gradle build and test failures), and you can add your own shapes in `kestrel.yaml`. See
+the stack. That includes Java and Kotlin (Spring Boot, JDBC, Maven/Gradle), Rust (panics, cargo), .NET (unhandled
+exceptions, Kestrel, MSBuild), Ruby and Rails, and PHP and Laravel: crashes, port and database failures, missing
+code, and build and test failures. You can add your own shapes in `kestrel.yaml`. See
 [docs/events.md](docs/events.md).
 
 ---
