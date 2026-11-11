@@ -14,6 +14,9 @@ import (
 type TextOptions struct {
 	Style Style
 	Quiet bool // omit hints and footers
+	// Width is the terminal's column count, or 0 when output isn't a terminal
+	// (then nothing is shortened to fit).
+	Width int
 }
 
 func sourceRef(s api.Source) string {
