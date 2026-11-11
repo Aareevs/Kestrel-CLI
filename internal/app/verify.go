@@ -142,9 +142,9 @@ func (a *App) verify(ctx context.Context, ref string, all bool, o VerifyOptions)
 		} else {
 			rep.Notes = append(rep.Notes, "the session recorded no incident; checking that everything is healthy")
 		}
-		if rep.Live && w.Duration < collectors.DefaultRepeatWindow {
-			rep.Notes = append(rep.Notes, fmt.Sprintf("an error repeating unchanged is recorded as one summary every %s; "+
-				"this %s window may not see it recur (the default %s window does)", collectors.DefaultRepeatWindow, w.Duration, DefaultVerifyWindow))
+		if rep.Live && w.Duration < collectors.DefaultRepeatFlush {
+			rep.Notes = append(rep.Notes, fmt.Sprintf("an error repeating unchanged is recorded as a summary every %s; "+
+				"this %s window may not see it recur (the default %s window does)", collectors.DefaultRepeatFlush, w.Duration, DefaultVerifyWindow))
 		}
 		if !rep.Live {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("session %s is not running, so only probes and commands are compared; "+
