@@ -27,7 +27,8 @@ Review the diff line by line. A golden only proves output is stable. It doesn't 
 ## Adding a discovery fixture
 
 The fixtures are `node-vite`, `go-api`, `compose-stack`, `python-django`, `dotnet-api`, `phoenix-app`,
-`bun-elysia`, and `deno-fresh`. Every golden is reviewed line by line against the fixture's files (each line
+`bun-elysia`, `deno-fresh`, `pnpm-monorepo`, and `go-workspace` (the last two each have a member beyond the depth
+limit). Every golden is reviewed line by line against the fixture's files (each line
 number, command, and port).
 
 Ecosystems are analyzers registered in `internal/discovery/registry.go`. A new one lives in its own file and

@@ -179,6 +179,7 @@ claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 | **.NET**: ASP.NET Core, worker services, console apps | `*.csproj` / `*.fsproj`, `Properties/launchSettings.json`, `appsettings.json` | Standard |
 | **Elixir**: Phoenix, Plug (Bandit, Cowboy) | `mix.exs`, `config/dev.exs`, `config/runtime.exs` | Standard |
 | **Deno**: Fresh, Oak, Hono, `Deno.serve` | `deno.json(c)` tasks, `Deno.serve` entry files | Standard |
+| **Monorepos**: pnpm, npm, yarn and Bun workspaces; Go workspaces; Cargo workspaces | `pnpm-workspace.yaml`, `package.json` `workspaces`, `go.work`, `[workspace]` in `Cargo.toml` | Standard |
 | **Bun**: Elysia, `Bun.serve` | `package.json`, `bun.lock(b)`, `bunfig.toml`, `index.ts` entry files | Standard |
 
 Detection (above) is separate from diagnosis: `kestrel diagnose` recognizes failures from the output itself, whatever
