@@ -638,3 +638,113 @@ func TestPortHeldByAnotherServiceInTheSession(t *testing.T) {
 		t.Errorf("unowned port: %+v", h)
 	}
 }
+
+// Found by running a real `go run` with a compile error, `npm run nope` and a
+// refused `curl`: none of their output matches a known pattern, and the
+// diagnosis said "its output shows no error" while the reason sat right there.
+func TestUnrecognizedOutputIsShownWhenAProcessDies(t *testing.T) {
+	stderr := func(s *stream, ms int, svc, msg string) {
+		s.line(ms, svc, msg)
+		s.evs[len(s.evs)-1].Source = api.SourceStderr
+	}
+	s := newStream()
+	s.started(0, "go")
+	stderr(s, 100, "go", "# dog")
+	stderr(s, 101, "go", "./main.go:2:20: declared and not used: x")
+	stderr(s, 102, "go", "") // blank lines are skipped
+	s.crash(120, "go", 1)
+	d := diagnose(t, api.Topology{}, s)[0]
+	top := d.Hypotheses[0]
+	if top.RuleID != "K004-startup-failure" || top.Confidence.Level != api.ConfidenceMedium {
+		t.Fatalf("top: %s", ruleIDs(d))
+	}
+	if !strings.Contains(top.Title, "its last output: ./main.go:2:20: declared and not used: x") {
+		t.Errorf("title should quote the line that reads like the error, not the first one: %q", top.Title)
+	}
+	if !strings.Contains(top.Explanation, "matched no known error pattern") || !strings.Contains(top.Explanation, "declared and not used") {
+		t.Errorf("explanation: %q", top.Explanation)
+	}
+	unrecognized := 0
+	for _, e := range top.Supporting {
+		if strings.Contains(e.Summary, "(unrecognized output)") {
+			unrecognized++
+		}
+	}
+	if unrecognized != 2 {
+		t.Errorf("the last two non-empty lines should be cited, got %d: %+v", unrecognized, top.Supporting)
+	}
+	if got := strings.Join(top.Confidence.Factors, " | "); !strings.Contains(got, "last lines are shown") {
+		t.Errorf("factors: %s", got)
+	}
+
+	// stdout is used when nothing came on stderr; with no output at all the old wording stays.
+	s2 := newStream()
+	s2.started(0, "api")
+	s2.line(100, "api", "starting up")
+	s2.evs[len(s2.evs)-1].Source = api.SourceStdout
+	s2.crash(120, "api", 2)
+	if h := diagnose(t, api.Topology{}, s2)[0].Hypotheses[0]; !strings.Contains(h.Title, "its last output: starting up") {
+		t.Errorf("stdout fallback: %q", h.Title)
+	}
+	s3 := newStream()
+	s3.started(0, "api")
+	s3.crash(120, "api", 2)
+	if h := diagnose(t, api.Topology{}, s3)[0].Hypotheses[0]; strings.Contains(h.Title, "last output") || !strings.Contains(h.Explanation, "doesn't say why") {
+		t.Errorf("no output: %q / %q", h.Title, h.Explanation)
+	}
+	// A recognized error still wins and is unchanged.
+	s4 := newStream()
+	s4.started(0, "api")
+	s4.line(100, "api", "Error: Cannot find module 'express'")
+	s4.evs[len(s4.evs)-1].Source = api.SourceStderr
+	s4.crash(120, "api", 1)
+	for _, h := range diagnose(t, api.Topology{}, s4)[0].Hypotheses {
+		if h.RuleID == "K004-startup-failure" && strings.Contains(h.Title, "last output") {
+			t.Errorf("a recognized error line must be used as the cause: %q", h.Title)
+		}
+	}
+}
+
+// npm prints the reason first and advice after it, so the headline is the first
+// error-like line of the last few, not the last line.
+func TestUnrecognizedOutputPrefersTheHeadlineOverTrailingAdvice(t *testing.T) {
+	s := newStream()
+	s.started(0, "npm")
+	for i, m := range []string{
+		`npm error Missing script: "nope"`, "npm error", "npm error To see a list of scripts, run:", "npm error   npm run",
+		"npm error A complete log of this run can be found in: /home/u/.npm/_logs/2026-11-12.log",
+	} {
+		s.line(100+i, "npm", m)
+		s.evs[len(s.evs)-1].Source = api.SourceStderr
+	}
+	s.crash(200, "npm", 1)
+	top := diagnose(t, api.Topology{}, s)[0].Hypotheses[0]
+	if !strings.Contains(top.Title, `its last output: npm error Missing script: "nope"`) {
+		t.Errorf("title: %q", top.Title)
+	}
+	// The headline and the last two lines are cited, not every line.
+	n := 0
+	for _, e := range top.Supporting {
+		if strings.Contains(e.Summary, "(unrecognized output)") {
+			n++
+		}
+	}
+	if n != 3 {
+		t.Errorf("cited %d lines, want 3: %+v", n, top.Supporting)
+	}
+}
+
+// A process that is still running but never became ready has not said why by
+// printing "starting"; only a process that died has last words worth quoting.
+func TestStartupTimeoutDoesNotQuoteUnrelatedOutput(t *testing.T) {
+	s := newStream()
+	s.started(0, "api")
+	s.line(50, "api", "api starting (pid 1)")
+	s.evs[len(s.evs)-1].Source = api.SourceStdout
+	s.timeout(10000, "api")
+	for _, h := range diagnose(t, api.Topology{}, s)[0].Hypotheses {
+		if strings.Contains(h.Title, "last output") || strings.Contains(fmt.Sprint(h.Supporting), "unrecognized output") {
+			t.Errorf("a startup timeout must not quote unrelated output: %+v", h)
+		}
+	}
+}
