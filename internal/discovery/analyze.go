@@ -14,13 +14,9 @@ import (
 func (s *scanner) analyze() []api.ServiceCandidate {
 	var cands []*candidate
 	for _, dir := range s.sortedDirs() {
-		cands = append(cands, s.analyzeNode(dir)...)
-		cands = append(cands, s.analyzeGo(dir)...)
-		cands = append(cands, s.analyzePython(dir)...)
-		cands = append(cands, s.analyzeJVM(dir)...)
-		cands = append(cands, s.analyzePHP(dir)...)
-		cands = append(cands, s.analyzeRuby(dir)...)
-		cands = append(cands, s.analyzeRust(dir)...)
+		for _, a := range registeredAnalyzers() {
+			cands = append(cands, a.run(s, dir)...)
+		}
 		var composeNames []string
 		for _, n := range s.files[dir] {
 			if composeFiles[n] {
