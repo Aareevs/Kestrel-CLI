@@ -35,6 +35,9 @@ type Options struct {
 	RepeatWindow time.Duration // longest run of repeats folded into one summary (default 10s)
 	RepeatIdle   time.Duration // flush a repeat summary after this much quiet (default 1s)
 	Redactor     *privacy.Redactor
+	// Patterns classifies lines. Nil means the built-in library; a project
+	// passes its own (built-ins plus the patterns in kestrel.yaml).
+	Patterns *events.Library
 }
 
 func (o *Options) defaults() {
@@ -153,7 +156,7 @@ func (c *Collector) ReadStream(service string, pid int, src api.EventSource, r i
 		if truncated > 0 {
 			msg += TruncationMarker(truncated)
 		}
-		cl := events.Classify(msg)
+		cl := c.opts.Patterns.Classify(msg)
 		ev := api.Event{
 			Time:      c.stamper.Now(),
 			ServiceID: service,

@@ -3,6 +3,7 @@ package collectors
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -359,5 +360,38 @@ func TestEmitCleansAndRedacts(t *testing.T) {
 	m := got[0].Message
 	if strings.ContainsAny(m, "\x1b\x07") || !strings.Contains(m, "--say 'hi'") || strings.Contains(m, "sup3rs3cret") {
 		t.Fatalf("%q", m)
+	}
+}
+
+// A project's own patterns classify its output; lines the built-ins know are
+// unaffected.
+func TestCollectorUsesTheProjectsPatternLibrary(t *testing.T) {
+	lib, err := events.DefaultLibrary().With(events.Pattern{
+		ID: "U001-shard", Description: "a shard is down", Type: api.EventDependencyConnFailed, Severity: api.SeverityError,
+		Re:    regexp.MustCompile(`shard (?P<target>\S+) unreachable`),
+		Match: []string{"shard db-7:5432 unreachable"}, NoMatch: []string{"shard db-7:5432 ok"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var got []api.Event
+	c := New(events.NewStamper(nil), SinkFunc(func(e api.Event) { mu.Lock(); got = append(got, e); mu.Unlock() }), Options{Patterns: lib})
+	go c.Run()
+	if err := c.ReadStream("api", 1, api.SourceStdout, strings.NewReader("shard db-7:5432 unreachable\npanic: boom\nplain line\n")); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	c.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 3 {
+		t.Fatalf("%d events", len(got))
+	}
+	if e := got[0]; e.Attrs.PatternID != "U001-shard" || e.Type != api.EventDependencyConnFailed || e.Attrs.Target != "db-7:5432" || e.Attrs.Port != 5432 {
+		t.Fatalf("custom pattern: %+v", e)
+	}
+	if got[1].Attrs.PatternID != "P009-go-panic" || got[2].Attrs.PatternID != "" {
+		t.Fatalf("built-ins: %+v %+v", got[1], got[2])
 	}
 }
