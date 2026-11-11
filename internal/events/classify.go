@@ -76,8 +76,9 @@ func Classify(line string) Classification {
 	if lvl, ok := Level(line); ok {
 		c.Severity, c.Explicit = lvl, true
 	}
-	for i := range Patterns {
-		p := &Patterns[i]
+	patterns := Patterns()
+	for i := range patterns {
+		p := &patterns[i]
 		m := p.Re.FindStringSubmatch(line)
 		if m == nil {
 			continue
