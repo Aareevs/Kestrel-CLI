@@ -1,0 +1,12 @@
+Project  <root>
+Stack    node
+
+Service candidates (1)
+
+  pocket-ledger  node (expo) · .                         high
+    command  npm start                                   package.json:6
+    port     8081 (medium)                               package.json:11 · expo default port
+    health   http http://localhost:8081/                 no health endpoint detected; probes the root path
+
+Scanned 2 files in 1 directory (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

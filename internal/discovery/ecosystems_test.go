@@ -307,3 +307,22 @@ func TestNewAnalyzersAreRegisteredAfterTheBuiltIns(t *testing.T) {
 		t.Fatalf("analyzers = %v", got)
 	}
 }
+
+// Found by running Kestrel over real projects: Expo apps (`expo start`) had no
+// framework and no port, though Metro listens on 8081.
+func TestExpoAndReactNative(t *testing.T) {
+	got, _ := view(t, map[string]string{
+		"app/package.json":      `{"name":"app","scripts":{"start":"expo start"},"dependencies":{"expo":"~52.0.0","react-native":"0.76.0"}}`,
+		"pinned/package.json":   `{"name":"pinned","scripts":{"start":"expo start --port 8090"},"dependencies":{"expo":"~52.0.0","react-native":"0.76.0"}}`,
+		"bare/package.json":     `{"name":"bare","scripts":{"start":"react-native start"},"dependencies":{"react-native":"0.76.0"}}`,
+		"web-only/package.json": `{"name":"web-only","scripts":{"dev":"vite"},"dependencies":{"vite":"^5.0.0","react":"18"}}`,
+		"server/package.json":   `{"name":"server","scripts":{"start":"node server.js"},"dependencies":{"express":"4"}}`,
+		"app/app.json":          `{"expo":{}}`,
+	})
+	checkCand(t, got, wantCand{name: "app", cmd: "npm start", port: 8081, fw: "expo", pm: "npm"})
+	checkCand(t, got, wantCand{name: "pinned", cmd: "npm start", port: 8090, fw: "expo", pm: "npm"})
+	checkCand(t, got, wantCand{name: "bare", cmd: "npm start", port: 8081, fw: "react-native", pm: "npm"})
+	// Neighbours keep their own detection.
+	checkCand(t, got, wantCand{name: "web-only", cmd: "npm run dev", port: 5173, fw: "vite", pm: "npm"})
+	checkCand(t, got, wantCand{name: "server", cmd: "npm start", port: 0, fw: "express", pm: "npm"})
+}

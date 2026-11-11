@@ -22,7 +22,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
-var fixtures = []string{"node-vite", "go-api", "compose-stack", "python-django", "dotnet-api", "phoenix-app", "bun-elysia", "deno-fresh", "pnpm-monorepo", "go-workspace"}
+var fixtures = []string{"node-vite", "go-api", "compose-stack", "python-django", "dotnet-api", "phoenix-app", "bun-elysia", "deno-fresh", "pnpm-monorepo", "go-workspace", "expo-app"}
 
 type result struct {
 	code   int

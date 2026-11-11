@@ -13,6 +13,11 @@ import (
 // maxEvidence bounds evidence lines per hypothesis (after collapsing repeats).
 const maxEvidence = 6
 
+// genericRules explain "it failed" without saying why. When a rule that does
+// say why applies to the same incident at the same confidence, that one is
+// listed first, and its next step is the one suggested.
+var genericRules = map[string]bool{"K004-startup-failure": true}
+
 // Diagnose runs every rule against one incident.
 func Diagnose(c *rules.Context) api.IncidentDiagnosis {
 	return DiagnoseWith(c, rules.All())
@@ -55,6 +60,9 @@ func DiagnoseWith(c *rules.Context, rs []rules.Rule) api.IncidentDiagnosis {
 		s += 5 * len(h.Services) // explains more of the incident
 		if len(h.Contradicting) > 0 {
 			s -= 20
+		}
+		if genericRules[h.RuleID] {
+			s -= 10 // a catch-all yields to a rule that names the cause
 		}
 		return s
 	}

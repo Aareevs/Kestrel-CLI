@@ -190,7 +190,7 @@ claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 
 | Stack | Detected From | Support Level |
 | :--- | :--- | :---: |
-| **Node.js**: Vite, Next.js, Nuxt, Astro, SvelteKit, Express, NestJS… | `package.json` scripts, lockfiles, `vite.config.*`, proxies | Full |
+| **Node.js**: Vite, Next.js, Nuxt, Astro, SvelteKit, Expo / React Native, Express, NestJS… | `package.json` scripts, lockfiles, `vite.config.*`, proxies | Full |
 | **Go**: gin, echo, fiber, chi, net/http | `go.mod`, `main.go`, health routes in code | Full |
 | **Docker Compose** | services, published ports, `depends_on`, build contexts | Full |
 | **Python**: Django, FastAPI, Flask (pip, uv, Poetry, Pipenv) | `manage.py`, `pyproject.toml`, `requirements.txt` | Standard |
