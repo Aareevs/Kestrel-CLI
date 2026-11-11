@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "dotnet"
+  ],
+  "candidates": [
+    {
+      "name": "orders.api",
+      "dir": ".",
+      "technology": "dotnet",
+      "framework": "aspnet",
+      "package_manager": "nuget",
+      "command": {
+        "value": "dotnet run",
+        "confidence": "high",
+        "source": {
+          "file": "Orders.Api.csproj",
+          "line": 1,
+          "note": "web SDK (Microsoft.NET.Sdk.Web)"
+        }
+      },
+      "port": {
+        "value": 5114,
+        "confidence": "high",
+        "source": {
+          "file": "Properties/launchSettings.json",
+          "line": 6,
+          "note": "launch profile \"http\""
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:5114/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "depends_on": [
+        {
+          "name": "postgres",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "Orders.Api.csproj",
+            "line": 9,
+            "note": "references Npgsql.EntityFrameworkCore.PostgreSQL"
+          }
+        },
+        {
+          "name": "redis",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "Orders.Api.csproj",
+            "line": 10,
+            "note": "references StackExchange.Redis"
+          }
+        }
+      ],
+      "sources": [
+        {
+          "file": "Orders.Api.csproj"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "scan": {
+    "files_seen": 3,
+    "dirs_seen": 2,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}

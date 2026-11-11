@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "elixir"
+  ],
+  "candidates": [
+    {
+      "name": "shop",
+      "dir": ".",
+      "technology": "elixir",
+      "framework": "phoenix",
+      "package_manager": "mix",
+      "command": {
+        "value": "mix phx.server",
+        "confidence": "high",
+        "source": {
+          "file": "mix.exs",
+          "line": 15,
+          "note": "phoenix dependency"
+        }
+      },
+      "port": {
+        "value": 4001,
+        "confidence": "high",
+        "source": {
+          "file": "config/dev.exs",
+          "line": 4,
+          "note": "endpoint port"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:4001/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "depends_on": [
+        {
+          "name": "postgres",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "mix.exs",
+            "line": 18,
+            "note": "uses postgrex"
+          }
+        },
+        {
+          "name": "redis",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "mix.exs",
+            "line": 19,
+            "note": "uses redix"
+          }
+        }
+      ],
+      "sources": [
+        {
+          "file": "mix.exs"
+        },
+        {
+          "file": "config/dev.exs"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "scan": {
+    "files_seen": 2,
+    "dirs_seen": 2,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}

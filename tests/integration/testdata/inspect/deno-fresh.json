@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "deno"
+  ],
+  "candidates": [
+    {
+      "name": "storefront",
+      "dir": ".",
+      "technology": "deno",
+      "framework": "fresh",
+      "package_manager": "deno",
+      "command": {
+        "value": "deno task dev",
+        "confidence": "high",
+        "source": {
+          "file": "deno.json",
+          "line": 5,
+          "note": "task: deno run -A --watch=static/,routes/ dev.ts"
+        }
+      },
+      "port": {
+        "value": 8000,
+        "confidence": "medium",
+        "source": {
+          "file": "deno.json",
+          "note": "Fresh default port"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:8000/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "depends_on": [
+        {
+          "name": "postgres",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "deno.json",
+            "line": 10,
+            "note": "imports postgres"
+          }
+        }
+      ],
+      "sources": [
+        {
+          "file": "deno.json"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "scan": {
+    "files_seen": 3,
+    "dirs_seen": 1,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}

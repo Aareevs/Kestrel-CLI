@@ -1,0 +1,12 @@
+{
+  // Fresh project
+  "name": "@acme/storefront",
+  "tasks": {
+    "dev": "deno run -A --watch=static/,routes/ dev.ts",
+    "start": "deno run --allow-net --allow-read --allow-env main.ts --port 8123"
+  },
+  "imports": {
+    "fresh": "jsr:@fresh/core@^2.0.0",
+    "postgres": "https://deno.land/x/postgres@v0.19.3/mod.ts",
+  }
+}

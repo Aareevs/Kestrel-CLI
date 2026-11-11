@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "node"
+  ],
+  "candidates": [
+    {
+      "name": "edge-api",
+      "dir": ".",
+      "technology": "node",
+      "framework": "elysia",
+      "package_manager": "bun",
+      "command": {
+        "value": "bun run src/index.ts",
+        "confidence": "medium",
+        "source": {
+          "file": "src/index.ts",
+          "note": "elysia entry; no start script"
+        }
+      },
+      "port": {
+        "value": 3000,
+        "confidence": "high",
+        "source": {
+          "file": "src/index.ts",
+          "line": 5,
+          "note": "port in listen() call"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:3000/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "depends_on": [
+        {
+          "name": "redis",
+          "kind": "inferred",
+          "resolved": false,
+          "source": {
+            "file": "package.json",
+            "line": 7,
+            "note": "uses ioredis"
+          }
+        }
+      ],
+      "sources": [
+        {
+          "file": "package.json"
+        }
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "scan": {
+    "files_seen": 4,
+    "dirs_seen": 2,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}
