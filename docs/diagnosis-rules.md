@@ -23,6 +23,12 @@ latest anomaly. Each join is recorded as one of two kinds:
   service owns;
 - **weak**: time only.
 
+A strong join can carry an incident on for as long as the failure does. A **weak** join may not stretch it: it must
+fall within one window of where the incident *started*. So unrelated errors in a long session no longer chain, each
+within a window of the last, into one ever-growing incident; a weak incident is at most one window long. A repeat
+summary ("×6 more over 2.4s") covers a span, so it continues whatever came before the start of its span, and a
+dependent's steady refusals stay in the incident they belong to.
+
 An incident's `correlation_strength` is `weak` if any join was weak. That is a separate field from any
 hypothesis's causal confidence.
 
@@ -115,6 +121,12 @@ line" is the last fatal one, else the last error one, whether it is plain output
 target** (the Docker daemon being down, a database login failing): nothing can link those to another service, so
 they are the cause themselves. A connection failure that names a target is evidence about a dependency, and is
 handled through the dependency graph instead.
+
+When no known pattern matched any of the output (a compile error, `npm error Missing script`, `curl: (7) Failed to
+connect`), the hypothesis still shows what the process said: the first error-like line among its last few (the
+reason, which tools print before their advice) is quoted in the title as "its last output: …", and that line and the
+last two are cited as evidence marked "(unrecognized output)". The confidence stays `medium`: Kestrel doesn't
+claim to understand the line, it points you at it.
 
 **Confidence:**
 
