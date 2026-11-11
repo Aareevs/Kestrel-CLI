@@ -110,6 +110,7 @@ pattern claims one of your `Match` examples.
 | `P012-out-of-memory` | `log_line` (fatal) | V8 heap OOM, Go runtime OOM, Python `MemoryError`, Java `OutOfMemoryError`, PHP "Allowed memory size … exhausted", Docker `OOMKilled`, the Linux OOM killer |
 | `P009-go-panic` | `log_line` (fatal) | `panic:` / `fatal error:` at line start |
 | `P010-node-uncaught` | `log_line` (fatal) | uncaught exceptions, unhandled promise rejections |
+| `P042-node-error-location` | `log_line` (warn) | the `node:internal/…:N` line Node prints before an uncaught error (it points at the error but isn't it) |
 | `P011-python-traceback` | `log_line` (error) | `Traceback (most recent call last):` |
 | `P013-module-not-found` | `log_line` (error) | missing Node/Python modules, missing Go packages, missing Java classes (`ClassNotFoundException`, `NoClassDefFoundError`, "Could not find or load main class", "Unable to access jarfile"), .NET assemblies and runtimes, Ruby gems and `LoadError`, PHP `vendor/autoload.php` and missing classes |
 | `P014-test-failed` | `test_failed` | `go test`, Jest, pytest, Maven Surefire (`Tests run: …, Failures: 1`) and Gradle (`3 tests completed, 1 failed`, `> Task :test FAILED`), `dotnet test` (`Failed!  - Failed: 1`), RSpec and Minitest, and PHPUnit (`FAILURES!`) failure summaries |

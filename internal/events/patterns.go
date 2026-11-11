@@ -184,13 +184,25 @@ var builtinPatterns = []Pattern{
 		Description: "a Node.js process hit an uncaught exception or unhandled rejection",
 		Type:        api.EventLogLine,
 		Severity:    api.SeverityFatal,
-		Re:          regexp.MustCompile(`(?:^Uncaught \w*Error|UnhandledPromiseRejection|^node:internal/\S+:\d+$|\[UnhandledPromiseRejection)`),
+		Re:          regexp.MustCompile(`(?:^Uncaught \w*Error|UnhandledPromiseRejection)`),
 		Match: []string{
 			"Uncaught TypeError: Cannot read properties of undefined (reading 'id')",
-			"node:internal/process/promises:289",
 			"[UnhandledPromiseRejection: This error originated either by throwing inside of an async function]",
 		},
-		NoMatch: []string{"caught TypeError and retried"},
+		NoMatch: []string{"caught TypeError and retried", "node:internal/process/promises:289"},
+	},
+	{
+		// Node prints where an uncaught error was thrown on a line of its own,
+		// before the error itself. It points at the error but isn't it: at
+		// fatal severity it used to be picked as the cause over the real
+		// "Error: Cannot find module 'x'" line that follows.
+		ID:          "P042-node-error-location",
+		Description: "Node printed the location of an uncaught error (the error itself follows)",
+		Type:        api.EventLogLine,
+		Severity:    api.SeverityWarn,
+		Re:          regexp.MustCompile(`^node:internal/\S+:\d+$`),
+		Match:       []string{"node:internal/process/promises:289", "node:internal/modules/cjs/loader:1573"},
+		NoMatch:     []string{"    at Module._load (node:internal/modules/cjs/loader:1346:5)", "node:internal/modules/cjs/loader:1573 failed"},
 	},
 	{
 		ID:          "P011-python-traceback",

@@ -558,3 +558,83 @@ func TestEveryRuleIsDocumented(t *testing.T) {
 		}
 	}
 }
+
+// Found by running a real `node -e "require('express')"`: Node prints a
+// location line before the error, and the generic startup-failure hypothesis
+// ranked above the one that names the missing module and says to install it.
+func TestMissingModuleOutranksGenericStartupFailure(t *testing.T) {
+	s := newStream()
+	s.started(0, "node")
+	s.line(100, "node", "node:internal/modules/cjs/loader:1573")
+	s.line(101, "node", "  throw err;")
+	s.line(102, "node", "  ^")
+	s.line(103, "node", "Error: Cannot find module 'express'")
+	s.line(104, "node", "Require stack:")
+	s.crash(120, "node", 1)
+	d := diagnose(t, api.Topology{}, s)[0]
+	top := d.Hypotheses[0]
+	if top.RuleID != "K006-missing-module" || !strings.Contains(top.Title, "express") || !strings.Contains(top.NextStep.Description, "npm install") {
+		t.Fatalf("top should be the missing module with an install step: %s\n%+v", ruleIDs(d), top)
+	}
+	if d.NextStep.Description != top.NextStep.Description {
+		t.Errorf("the incident's next step should come from the top hypothesis: %q", d.NextStep.Description)
+	}
+	// The generic hypothesis is still there, and its cause is the real error line, not Node's location line.
+	for _, h := range d.Hypotheses {
+		if h.RuleID == "K004-startup-failure" {
+			if !strings.Contains(h.Title, "Cannot find module 'express'") {
+				t.Errorf("K004 picked the wrong line as the cause: %s", h.Title)
+			}
+			return
+		}
+	}
+	t.Errorf("K004 missing: %s", ruleIDs(d))
+}
+
+// The generic penalty only breaks ties; it never beats higher confidence.
+func TestGenericRuleStillLeadsWhenNothingMoreSpecificApplies(t *testing.T) {
+	s := newStream()
+	s.started(0, "api")
+	s.line(100, "api", "fatal: could not frobnicate the widget")
+	s.crash(120, "api", 1)
+	d := diagnose(t, api.Topology{}, s)[0]
+	if d.Hypotheses[0].RuleID != "K004-startup-failure" {
+		t.Fatalf("got %s", ruleIDs(d))
+	}
+}
+
+// When the port is held by another service of the same session, the diagnosis
+// says which, cites its listening line, and does not claim an unknown process
+// holds it.
+func TestPortHeldByAnotherServiceInTheSession(t *testing.T) {
+	s := newStream()
+	s.started(0, "web")
+	s.started(5, "admin")
+	s.line(50, "web", "Server listening on port 3000")
+	s.line(100, "admin", "Error: listen EADDRINUSE: address already in use :::3000")
+	s.crash(120, "admin", 1)
+	d := diagnose(t, api.Topology{}, s)[0]
+	top := d.Hypotheses[0]
+	if top.RuleID != "K001-port-conflict" || !strings.Contains(top.Title, "admin could not start: port 3000 is already in use by web") {
+		t.Fatalf("top: %s\n%+v", ruleIDs(d), top)
+	}
+	if strings.Contains(top.Explanation, "not started by Kestrel") || !strings.Contains(top.Explanation, "another service in this session") ||
+		!strings.Contains(top.NextStep.Description, "different port") {
+		t.Errorf("explanation/next step: %q / %q", top.Explanation, top.NextStep.Description)
+	}
+	cited := false
+	for _, e := range top.Supporting {
+		cited = cited || (e.Service == "web" && strings.Contains(e.Summary, "3000"))
+	}
+	if !cited {
+		t.Errorf("web's listening line should be cited: %+v", top.Supporting)
+	}
+	// And the plain case is unchanged: a port with no known owner is some other process.
+	s2 := newStream()
+	s2.started(0, "admin")
+	s2.line(100, "admin", "Error: listen EADDRINUSE: address already in use :::3000")
+	s2.crash(120, "admin", 1)
+	if h := diagnose(t, api.Topology{}, s2)[0].Hypotheses[0]; !strings.Contains(h.Explanation, "not started by Kestrel") || strings.Contains(h.Title, " by ") {
+		t.Errorf("unowned port: %+v", h)
+	}
+}
