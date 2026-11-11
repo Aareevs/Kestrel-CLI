@@ -8,7 +8,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -129,7 +128,7 @@ func tool[In, Out any](s *Server, name, title, desc string, fn func(context.Cont
 			if err != nil {
 				return nil, zero, errors.New(s.red.Redact(err.Error()))
 			}
-			red, err := redactValue(s.red, out)
+			red, err := privacy.RedactValue(s.red, out)
 			if err != nil {
 				return nil, zero, fmt.Errorf("could not prepare the result: %v", err)
 			}
@@ -229,43 +228,4 @@ func (s *Server) register() {
 		func(ctx context.Context, in SessionArg) (*api.VerificationResults, error) {
 			return a.VerificationResults(ctx, in.Session)
 		})
-}
-
-// redactValue redacts every string inside v. It works on the decoded JSON
-// tree, so a replacement can never break the JSON itself.
-func redactValue[T any](r *privacy.Redactor, v T) (T, error) {
-	var zero T
-	b, err := json.Marshal(v)
-	if err != nil {
-		return zero, err
-	}
-	var tree any
-	if err := json.Unmarshal(b, &tree); err != nil {
-		return zero, err
-	}
-	b, err = json.Marshal(redactTree(r, tree))
-	if err != nil {
-		return zero, err
-	}
-	var out T
-	if err := json.Unmarshal(b, &out); err != nil {
-		return zero, err
-	}
-	return out, nil
-}
-
-func redactTree(r *privacy.Redactor, v any) any {
-	switch t := v.(type) {
-	case string:
-		return r.Redact(t)
-	case []any:
-		for i := range t {
-			t[i] = redactTree(r, t[i])
-		}
-	case map[string]any:
-		for k, x := range t {
-			t[k] = redactTree(r, x)
-		}
-	}
-	return v
 }

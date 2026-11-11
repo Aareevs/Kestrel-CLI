@@ -184,12 +184,12 @@ func TestMCPRedactsWithCurrentProjectPatterns(t *testing.T) {
 	home, project := t.TempDir(), t.TempDir()
 	project, _ = filepath.EvalSymlinks(project)
 	runSession(t, home, project, "--say", "ticket INTERNAL-4242 opened")
-	os.WriteFile(filepath.Join(project, "kestrel.yaml"), []byte("version: 1\nredaction:\n  extra_patterns: ['INTERNAL-[0-9]+']\n"), 0o644)
-
-	// Stored before the pattern existed, so the stored text has it.
+	// Stored before the pattern existed, so the stored text has it (the CLI
+	// shows stored text with today's rules, so look before adding the pattern).
 	if _, out, _ := kestrelCmd(t, home, project, "timeline", "--service", "api", "--format", "json"); !strings.Contains(out, "INTERNAL-4242") {
 		t.Fatal("test premise: the stored session should contain the token")
 	}
+	os.WriteFile(filepath.Join(project, "kestrel.yaml"), []byte("version: 1\nredaction:\n  extra_patterns: ['INTERNAL-[0-9]+']\n"), 0o644)
 	cs := connectMCP(t, home, project)
 	res, wire := call(t, cs, "get_failure_timeline", map[string]any{"service": "api"})
 	if res.IsError || strings.Contains(wire, "INTERNAL-4242") || !strings.Contains(wire, "ticket [REDACTED:") {

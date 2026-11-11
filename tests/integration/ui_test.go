@@ -108,7 +108,7 @@ func TestVerifyWithNothingToCheckDoesNotWaitOutTheWindow(t *testing.T) {
 	if r.code != 3 || took > 5*time.Second {
 		t.Fatalf("exit %d after %v (a 20s window must not be waited out)\n%s%s", r.code, took, r.stdout, r.stderr)
 	}
-	for _, want := range []string{"nothing to sample, so no stability window", "No recorded session for this project.", "Checks none could be chosen", "inconclusive"} {
+	for _, want := range []string{"nothing to sample, so no stability window", "No recorded session for this project.", "Checks (none could be chosen)", "inconclusive"} {
 		if !strings.Contains(r.stdout+r.stderr, want) {
 			t.Errorf("output lacks %q:\n%s%s", want, r.stdout, r.stderr)
 		}
@@ -387,5 +387,39 @@ func TestMCPInitAndConfigCommands(t *testing.T) {
 	}
 	if code, _, errs = kestrelCmd(t, home, project, "mcp", "inti"); code != 2 || !strings.Contains(errs, "init") {
 		t.Errorf("typo: exit %d\n%s", code, errs)
+	}
+}
+
+// Found by running a real tool that printed secrets: text recorded under older
+// redaction rules was printed as stored by `kestrel timeline --service`. Every
+// command now applies today's rules (including a project's extra patterns added
+// after the session was recorded) before printing.
+func TestEveryCommandRedactsWithTodaysRules(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	project, _ = filepath.EvalSymlinks(project)
+	secret := "ZZSECRET-9f8e7d6c5b4a"
+	code, out, errs := kestrelCmd(t, home, project, "run", "--quiet", "--", "sh", "-c",
+		"echo 'rotating key "+secret+" now'; echo 'fatal: boom' >&2; exit 1")
+	if code != 1 {
+		t.Fatalf("run: exit %d\n%s%s", code, out, errs)
+	}
+	// With no rule for it, the format is recorded as is: the premise of the test.
+	if _, tl, _ := kestrelCmd(t, home, project, "timeline", "--service", "sh"); !strings.Contains(tl, secret) {
+		t.Fatalf("premise: the secret should have been recorded as-is:\n%s", tl)
+	}
+	// A rule added afterwards applies to what was already recorded.
+	os.WriteFile(filepath.Join(project, "kestrel.yaml"), []byte("version: 1\nredaction:\n  extra_patterns: ['ZZSECRET-[a-z0-9]+']\n"), 0o644)
+	for _, args := range [][]string{
+		{"timeline", "--service", "sh"}, {"timeline"}, {"timeline", "--json"}, {"diagnose"}, {"diagnose", "--json"},
+		{"sessions", "show"}, {"sessions", "show", "--json"}, {"sessions", "export", "last"},
+	} {
+		_, o, e := kestrelCmd(t, home, project, args...)
+		if strings.Contains(o+e, secret) || strings.Contains(o+e, "ZZSECRET") {
+			t.Errorf("kestrel %v printed the secret:\n%s", args, o)
+		}
+	}
+	// And with the rule in place the placeholder is shown, so the check isn't vacuous.
+	if _, tl, _ := kestrelCmd(t, home, project, "timeline", "--service", "sh"); !strings.Contains(tl, "[REDACTED:custom]") {
+		t.Errorf("expected a placeholder:\n%s", tl)
 	}
 }

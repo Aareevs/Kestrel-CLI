@@ -163,6 +163,11 @@ func (a *App) resolve(ctx context.Context, st *storage.Store, ref string, all bo
 
 // SessionShow returns one session in detail.
 func (a *App) SessionShow(ctx context.Context, ref string, all bool) (*api.SessionDetail, error) {
+	rep, err := a.sessionShow(ctx, ref, all)
+	return scrubbed(a, rep, err)
+}
+
+func (a *App) sessionShow(ctx context.Context, ref string, all bool) (*api.SessionDetail, error) {
 	st, err := a.openStoreRecovered(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%s", storageHint(err))

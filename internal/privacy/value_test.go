@@ -1,11 +1,10 @@
-package mcp
+package privacy
 
 import (
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/Aareevs/Kestrel-CLI/internal/privacy"
 	"github.com/Aareevs/Kestrel-CLI/pkg/api"
 )
 
@@ -16,7 +15,7 @@ func TestRedactValue(t *testing.T) {
 			Message: `login failed: password=hunter22 "quoted" \ back`, Attrs: api.Attrs{Target: "postgres://app:s3cret@db:5432/x"}}},
 		Limit: 5,
 	}
-	out, err := redactValue(privacy.Default, in)
+	out, err := RedactValue(Default, in)
 	if err != nil {
 		t.Fatal(err)
 	}

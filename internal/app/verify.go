@@ -71,6 +71,11 @@ type VerifyPlan struct {
 // session with the incident's, and runs configured commands only when
 // authorized. It never starts or signals services.
 func (a *App) Verify(ctx context.Context, ref string, all bool, o VerifyOptions) (*api.VerificationReport, error) {
+	rep, err := a.verify(ctx, ref, all, o)
+	return scrubbed(a, rep, err)
+}
+
+func (a *App) verify(ctx context.Context, ref string, all bool, o VerifyOptions) (*api.VerificationReport, error) {
 	w := verification.Window{Duration: o.Window, Interval: o.Interval, Settle: verifySettle, OnRound: o.OnRound}
 	if w.Duration == 0 {
 		w.Duration = DefaultVerifyWindow
