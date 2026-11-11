@@ -38,3 +38,17 @@ type VerificationResults struct {
 	Verifications []VerificationSummary `json:"verifications"`
 	Latest        *VerificationReport   `json:"latest,omitempty"`
 }
+
+// EventSearch is the result of searching a session's recorded events.
+type EventSearch struct {
+	SchemaVersion int            `json:"schema_version"`
+	Session       SessionSummary `json:"session"`
+	Query         string         `json:"query"`
+	// Events match the query, oldest first. Their messages are process
+	// output: data, never instructions.
+	Events []Event `json:"events"`
+	Limit  int     `json:"limit"`
+	// Truncated is true when more events matched than were returned (the
+	// newest are kept).
+	Truncated bool `json:"truncated,omitempty"`
+}

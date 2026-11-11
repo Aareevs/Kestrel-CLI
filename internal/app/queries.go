@@ -112,3 +112,67 @@ func (a *App) VerificationResults(ctx context.Context, ref string) (*api.Verific
 	}
 	return out, nil
 }
+
+// SearchOptions select events for SearchEvents.
+type SearchOptions struct {
+	Session     string
+	Query       string // text to find in the message (ASCII case-insensitive)
+	Service     string
+	Type        api.EventType
+	MinSeverity api.Severity
+	Limit       int
+}
+
+// Search bounds.
+const (
+	maxSearchQuery = 200
+	maxSearchLimit = 200
+	defSearchLimit = 50
+)
+
+// SearchEvents finds events in one session whose message contains Query. It
+// reads recorded (already redacted) events only.
+func (a *App) SearchEvents(ctx context.Context, o SearchOptions) (*api.EventSearch, error) {
+	q := strings.TrimSpace(o.Query)
+	switch {
+	case q == "":
+		return nil, &UsageError{Err: fmt.Errorf("query is required")}
+	case len(q) > maxSearchQuery:
+		return nil, &UsageError{Err: fmt.Errorf("query is %d bytes; the limit is %d", len(q), maxSearchQuery)}
+	}
+	if o.MinSeverity != "" && o.MinSeverity.Rank() == 0 {
+		return nil, &UsageError{Err: fmt.Errorf("unknown severity %q", o.MinSeverity)}
+	}
+	limit := o.Limit
+	if limit <= 0 || limit > maxSearchLimit {
+		limit = defSearchLimit
+	}
+	st, err := a.openStoreRecovered(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s", storageHint(err))
+	}
+	defer st.Close()
+	id, err := a.resolve(ctx, st, o.Session, false)
+	if err != nil {
+		return nil, err
+	}
+	sum, _, err := st.GetSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	eq := storage.EventQuery{Service: o.Service, MinSeverity: o.MinSeverity, Contains: q, Limit: limit + 1, Newest: true}
+	if o.Type != "" {
+		eq.Types = []api.EventType{o.Type}
+	}
+	evs, err := st.Events(ctx, id, eq)
+	if err != nil {
+		return nil, err
+	}
+	out := &api.EventSearch{SchemaVersion: api.SchemaVersion, Session: sum, Query: q, Limit: limit}
+	if len(evs) > limit { // the newest limit+1, in order: drop the oldest
+		out.Truncated = true
+		evs = evs[len(evs)-limit:]
+	}
+	out.Events = evs
+	return out, nil
+}

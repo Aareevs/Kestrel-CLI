@@ -278,7 +278,10 @@ type EventQuery struct {
 	Types       []api.EventType
 	MinSeverity api.Severity
 	AfterSeq    uint64
-	Limit       int // 0 = no limit
+	// Contains keeps events whose message contains this text, ignoring ASCII
+	// case. It is bound as a parameter, never spliced into the SQL.
+	Contains string
+	Limit    int // 0 = no limit
 	// Newest returns the last Limit matching events (still in seq order).
 	Newest bool
 }
@@ -298,6 +301,10 @@ func (s *Store) Events(ctx context.Context, sessionID string, q EventQuery) ([]a
 		for _, t := range q.Types {
 			args = append(args, string(t))
 		}
+	}
+	if q.Contains != "" {
+		where = append(where, "instr(lower(message), lower(?)) > 0")
+		args = append(args, q.Contains)
 	}
 	if q.MinSeverity != "" {
 		var sevs []string
