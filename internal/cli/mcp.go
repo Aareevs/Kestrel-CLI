@@ -20,8 +20,9 @@ func newMCPCmd(g *globals) *cobra.Command {
 		Use:   "mcp",
 		Short: "Read-only MCP server over stdio for AI agents (and `mcp init` to set it up)",
 		Long: "Serves Kestrel's evidence to an MCP client (Claude Code, Cursor, …) over stdin/stdout.\n" +
-			"Tools: inspect_project, list_services, get_service_status, get_recent_errors,\n" +
-			"get_failure_timeline, get_diagnosis, get_session_summary, get_verification_results.\n" +
+			"Tools: inspect_project, list_services, list_sessions, get_service_status, get_recent_errors,\n" +
+			"search_events, get_failure_timeline, get_diagnosis, get_session_summary, get_verification_results,\n" +
+			"validate_config.\n" +
 			"All tools are read-only: none starts, stops, signals, or executes anything. Every result is redacted.\n\n" +
 			"Set up a client:  kestrel mcp init --client claude-code   (or: kestrel mcp config to just print it)",
 		Args: cobra.NoArgs,

@@ -42,6 +42,29 @@ type TimelineArgs struct {
 	Service string `json:"service,omitempty" jsonschema:"also return everything this service printed (most recent first, up to limit)"`
 	Since   string `json:"since,omitempty" jsonschema:"only the last part of the session, as a Go duration such as 5m"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"with service: at most this many events (default 200)"`
+	// Incident narrows the report to one incident.
+	Incident int `json:"incident,omitempty" jsonschema:"only this incident, numbered as in the report from 1 (default: all)"`
+}
+
+// DiagnosisArgs narrow get_diagnosis.
+type DiagnosisArgs struct {
+	Session  string `json:"session,omitempty" jsonschema:"recorded session: full ID, unique prefix, or 'last' (default)"`
+	Incident int    `json:"incident,omitempty" jsonschema:"only this incident, numbered as in the report from 1 (default: all)"`
+}
+
+// SearchArgs narrow search_events.
+type SearchArgs struct {
+	Query    string `json:"query" jsonschema:"text to find in event messages (case-insensitive for ASCII; plain text, not a pattern; at most 200 bytes)"`
+	Session  string `json:"session,omitempty" jsonschema:"recorded session: full ID, unique prefix, or 'last' (default)"`
+	Service  string `json:"service,omitempty" jsonschema:"only this service"`
+	Type     string `json:"type,omitempty" jsonschema:"only this event type, e.g. log_line, process_crashed, probe_failed, port_bind_failed, dependency_conn_failed"`
+	Severity string `json:"min_severity,omitempty" jsonschema:"at least this severity: debug, info, warn, error, fatal"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"most matches to return (default 50, max 200); the newest are kept"`
+}
+
+// SessionsArgs bound list_sessions.
+type SessionsArgs struct {
+	Limit int `json:"limit,omitempty" jsonschema:"most sessions to return, newest first (default 20, max 100)"`
 }
 
 // ErrorsArgs narrow get_recent_errors.
@@ -162,14 +185,38 @@ func (s *Server) register() {
 				}
 				since = d
 			}
-			return a.Timeline(ctx, in.Session, false, app.TimelineOptions{Service: in.Service, Since: since, Limit: in.Limit})
+			return a.Timeline(ctx, in.Session, false, app.TimelineOptions{Service: in.Service, Since: since, Limit: in.Limit, Incident: in.Incident})
 		})
 	tool(s, "get_diagnosis", "Diagnosis",
 		"Ranked root-cause hypotheses for each incident in a recorded session. Each hypothesis is a hypothesis, not a fact: it carries supporting and contradicting event IDs, "+
 			"a coarse confidence (high/medium/low) with the factors behind it, and one suggested next step for the user to run. "+
 			"status 'unresolved' means the evidence doesn't single out a cause; say so rather than picking one."+untrusted,
-		func(ctx context.Context, in SessionArg) (*api.DiagnosisReport, error) {
-			return a.Diagnose(ctx, in.Session, false)
+		func(ctx context.Context, in DiagnosisArgs) (*api.DiagnosisReport, error) {
+			return a.DiagnoseIncident(ctx, in.Session, false, in.Incident)
+		})
+	tool(s, "list_sessions", "List sessions",
+		"This project's recorded sessions, newest first: id, mode (run/watch), status, when, services, and counts of events and errors. Use an id as the session argument of the other tools.",
+		func(ctx context.Context, in SessionsArgs) (*api.SessionList, error) {
+			limit := in.Limit
+			if limit <= 0 || limit > 100 {
+				limit = 20
+			}
+			return a.SessionsList(ctx, false, limit)
+		})
+	tool(s, "search_events", "Search events",
+		"Finds recorded events in one session whose message contains some text (plain substring, not a regular expression), optionally for one service, type, or minimum severity. "+
+			"Use it to follow an error string or a port across services. Returns the newest matches, oldest first, each an observed event with an ID usable as evidence."+untrusted,
+		func(ctx context.Context, in SearchArgs) (*api.EventSearch, error) {
+			return a.SearchEvents(ctx, app.SearchOptions{
+				Session: in.Session, Query: in.Query, Service: in.Service,
+				Type: api.EventType(in.Type), MinSeverity: api.Severity(in.Severity), Limit: in.Limit,
+			})
+		})
+	tool(s, "validate_config", "Validate config",
+		"Checks the project's kestrel.yaml and lists every problem with its line number, or says it is valid. Reads the file only.",
+		func(ctx context.Context, _ struct{}) (*api.ConfigValidation, error) {
+			res, _, err := a.ValidateConfig()
+			return res, err
 		})
 	tool(s, "get_session_summary", "Session summary",
 		"One recorded session: when it ran, its services' final state, event counts by type, and its notable events (warnings and above, lifecycle, probe changes)."+untrusted,
