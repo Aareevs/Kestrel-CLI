@@ -61,6 +61,11 @@ func (a *App) Services(ctx context.Context) (*api.ServiceList, error) {
 // RecentErrors returns a session's latest error and fatal events (all
 // services, or one), oldest first.
 func (a *App) RecentErrors(ctx context.Context, ref, service string, limit int) (*api.RecentErrors, error) {
+	rep, err := a.recentErrors(ctx, ref, service, limit)
+	return scrubbed(a, rep, err)
+}
+
+func (a *App) recentErrors(ctx context.Context, ref, service string, limit int) (*api.RecentErrors, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 50
 	}
@@ -87,6 +92,11 @@ func (a *App) RecentErrors(ctx context.Context, ref, service string, limit int) 
 // VerificationResults lists a session's verifications, with the latest
 // report in full.
 func (a *App) VerificationResults(ctx context.Context, ref string) (*api.VerificationResults, error) {
+	rep, err := a.verificationResults(ctx, ref)
+	return scrubbed(a, rep, err)
+}
+
+func (a *App) verificationResults(ctx context.Context, ref string) (*api.VerificationResults, error) {
 	st, err := a.openStoreRecovered(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%s", storageHint(err))
@@ -133,6 +143,11 @@ const (
 // SearchEvents finds events in one session whose message contains Query. It
 // reads recorded (already redacted) events only.
 func (a *App) SearchEvents(ctx context.Context, o SearchOptions) (*api.EventSearch, error) {
+	rep, err := a.searchEvents(ctx, o)
+	return scrubbed(a, rep, err)
+}
+
+func (a *App) searchEvents(ctx context.Context, o SearchOptions) (*api.EventSearch, error) {
 	q := strings.TrimSpace(o.Query)
 	switch {
 	case q == "":

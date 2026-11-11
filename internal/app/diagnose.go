@@ -109,6 +109,11 @@ func (a *App) Diagnose(ctx context.Context, ref string, all bool) (*api.Diagnosi
 // DiagnoseIncident is Diagnose narrowed to one incident (1-based, as numbered in
 // the report); 0 means every incident.
 func (a *App) DiagnoseIncident(ctx context.Context, ref string, all bool, incident int) (*api.DiagnosisReport, error) {
+	rep, err := a.diagnoseIncident(ctx, ref, all, incident)
+	return scrubbed(a, rep, err)
+}
+
+func (a *App) diagnoseIncident(ctx context.Context, ref string, all bool, incident int) (*api.DiagnosisReport, error) {
 	an, err := a.analyze(ctx, ref, all)
 	if err != nil {
 		return nil, err
@@ -151,6 +156,11 @@ type TimelineOptions struct {
 // Timeline returns the incident timelines of a session, or with Service set,
 // that service's own recent events (all output, not just anomalies).
 func (a *App) Timeline(ctx context.Context, ref string, all bool, o TimelineOptions) (*api.TimelineReport, error) {
+	rep, err := a.timeline(ctx, ref, all, o)
+	return scrubbed(a, rep, err)
+}
+
+func (a *App) timeline(ctx context.Context, ref string, all bool, o TimelineOptions) (*api.TimelineReport, error) {
 	an, err := a.analyze(ctx, ref, all)
 	if err != nil {
 		return nil, err
