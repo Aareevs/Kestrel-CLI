@@ -176,15 +176,16 @@ func yamlIssues(err error) []Issue {
 }
 
 var schemaTypes = map[string]reflect.Type{
-	"Config":      reflect.TypeOf(Config{}),
-	"Project":     reflect.TypeOf(Project{}),
-	"Storage":     reflect.TypeOf(Storage{}),
-	"Correlation": reflect.TypeOf(Correlation{}),
-	"Redaction":   reflect.TypeOf(Redaction{}),
-	"Service":     reflect.TypeOf(Service{}),
-	"Health":      reflect.TypeOf(Health{}),
-	"Verify":      reflect.TypeOf(Verify{}),
-	"Check":       reflect.TypeOf(Check{}),
+	"Config":        reflect.TypeOf(Config{}),
+	"Project":       reflect.TypeOf(Project{}),
+	"Storage":       reflect.TypeOf(Storage{}),
+	"Correlation":   reflect.TypeOf(Correlation{}),
+	"Redaction":     reflect.TypeOf(Redaction{}),
+	"Service":       reflect.TypeOf(Service{}),
+	"Health":        reflect.TypeOf(Health{}),
+	"Verify":        reflect.TypeOf(Verify{}),
+	"Check":         reflect.TypeOf(Check{}),
+	"CustomPattern": reflect.TypeOf(CustomPattern{}),
 }
 
 // knownFields lists the YAML keys accepted by a schema type.

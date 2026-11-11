@@ -194,6 +194,8 @@ func validate(c *Config, doc *yaml.Node, projectRoot string) []Issue {
 		}
 	}
 
+	v.patterns(c)
+
 	sort.SliceStable(v.issues, func(a, b int) bool { return v.issues[a].Line < v.issues[b].Line })
 	return v.issues
 }

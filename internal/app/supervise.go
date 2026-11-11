@@ -227,6 +227,11 @@ func (a *App) redactor() (*privacy.Redactor, error) {
 }
 
 func (a *App) supervise(ctx context.Context, mode string, specs []process.ServiceSpec, exitWhenDone bool, red *privacy.Redactor, o SuperviseOptions) (*Outcome, error) {
+	// Checked first: a bad pattern in kestrel.yaml must not leave a half-created session behind.
+	lib, err := a.patternLibrary()
+	if err != nil {
+		return nil, err
+	}
 	stamper := events.NewStamper(a.Now)
 	names := make([]string, len(specs))
 	for i, s := range specs {
@@ -256,8 +261,8 @@ func (a *App) supervise(ctx context.Context, mode string, specs []process.Servic
 
 	state := newStateWriter(a.ProjectRoot, stamper.SessionID, mode, a.Now())
 	var sup *process.Supervisor
-	coll := collectors.New(stamper, collectors.SinkFunc(func(ev api.Event) { sup.Sink(emit).Emit(ev) }), collectors.Options{Redactor: red})
-	sup, err := process.NewSupervisor(specs, coll, process.Options{
+	coll := collectors.New(stamper, collectors.SinkFunc(func(ev api.Event) { sup.Sink(emit).Emit(ev) }), collectors.Options{Redactor: red, Patterns: lib})
+	sup, err = process.NewSupervisor(specs, coll, process.Options{
 		StopGrace:    o.StopGrace,
 		ExitWhenDone: exitWhenDone,
 		OnChange:     func() { state.update(sup.Status()) },
@@ -416,3 +421,21 @@ func cleanServiceName(s string) string {
 // Redactor returns the redactor for this project: the built-in patterns plus
 // redaction.extra_patterns from a valid kestrel.yaml.
 func (a *App) Redactor() (*privacy.Redactor, error) { return a.redactor() }
+
+// patternLibrary is the project's pattern library: the built-ins plus the
+// patterns in a valid kestrel.yaml. Without a config it is nil, which means the
+// built-ins.
+func (a *App) patternLibrary() (*events.Library, error) {
+	cfg, _, err := a.LoadConfig()
+	switch {
+	case errors.Is(err, ErrNoConfig):
+		return nil, nil
+	case err != nil:
+		return nil, &UsageError{Err: err}
+	}
+	lib, err := cfg.PatternLibrary()
+	if err != nil {
+		return nil, &UsageError{Err: err}
+	}
+	return lib, nil
+}

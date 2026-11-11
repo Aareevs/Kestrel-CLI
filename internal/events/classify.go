@@ -71,12 +71,14 @@ func Level(line string) (api.Severity, bool) {
 // The line's own declared level wins over a pattern's default severity
 // (a "WARN … connection refused, retrying" stays a warning), except that a
 // pattern with fatal severity (panic, OOM) always raises it.
-func Classify(line string) Classification {
+func Classify(line string) Classification { return classify(load(), line) }
+
+func classify(set *patternSet, line string) Classification {
 	c := Classification{Type: api.EventLogLine, Severity: api.SeverityInfo}
 	if lvl, ok := Level(line); ok {
 		c.Severity, c.Explicit = lvl, true
 	}
-	patterns := Patterns()
+	patterns := set.list
 	for i := range patterns {
 		p := &patterns[i]
 		m := p.Re.FindStringSubmatch(line)

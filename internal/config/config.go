@@ -39,6 +39,8 @@ type Config struct {
 	Redaction   Redaction   `yaml:"redaction" json:"redaction"`
 	Services    []Service   `yaml:"services" json:"services"`
 	Verify      Verify      `yaml:"verify" json:"verify"`
+	// Patterns teach Kestrel project-specific error shapes (see patterns.go).
+	Patterns []CustomPattern `yaml:"patterns,omitempty" json:"patterns,omitempty"`
 }
 
 // Project holds project metadata.

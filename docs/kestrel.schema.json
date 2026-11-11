@@ -17,7 +17,13 @@
       "items": { "$ref": "#/$defs/Service" },
       "description": "Processes Kestrel may supervise, or external services it only probes."
     },
-    "verify": { "$ref": "#/$defs/Verify" }
+    "verify": { "$ref": "#/$defs/Verify" },
+    "patterns": {
+      "type": "array",
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/CustomPattern" },
+      "description": "Project-specific error shapes. They run after the built-in patterns."
+    }
   },
   "$defs": {
     "Duration": {
@@ -96,6 +102,20 @@
         { "if": { "properties": { "type": { "const": "http" } } }, "then": { "required": ["url"] } },
         { "if": { "properties": { "type": { "const": "tcp" } } }, "then": { "required": ["address"] } }
       ]
+    },
+    "CustomPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "type", "severity", "regex", "match", "no_match"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^U[0-9]{3}-[a-z0-9]+(-[a-z0-9]+)*$", "description": "U001-short-name." },
+        "description": { "type": "string", "minLength": 1, "description": "What this error means." },
+        "type": { "enum": ["log_line", "dependency_conn_failed", "port_bind_failed", "test_failed"] },
+        "severity": { "enum": ["debug", "info", "warn", "error", "fatal"] },
+        "regex": { "type": "string", "minLength": 1, "maxLength": 1000, "description": "Go (RE2) regular expression. Named groups (?P<port>...) and (?P<target>...) become the event's port and target." },
+        "match": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "string", "maxLength": 1000 }, "description": "Lines the pattern must match." },
+        "no_match": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "type": "string", "maxLength": 1000 }, "description": "Similar lines it must not match." }
+      }
     },
     "Verify": {
       "type": "object",

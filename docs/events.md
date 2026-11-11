@@ -79,6 +79,10 @@ because diagnosis rules reference them.
 groups limited to `port*` and `target*`, and that every `Match` line matches and no `NoMatch` line does. A
 pattern that fails the check can't be registered, so the program (and its tests) won't start.
 
+**Project patterns.** A project can add its own patterns in [`kestrel.yaml`](configuration.md#patterns), without
+touching the code. They apply to that project's `run` and `watch` only, run after the built-ins, and carry the same
+evidence (`match` / `no_match` lines) that `kestrel config validate` checks.
+
 **Order.** The first match wins, so patterns are sorted by `Priority` (lower first). The built-ins are spaced 100
 apart (100, 200, …), so a new pattern can slot between two of them by choosing a priority in between. A pattern with
 no priority runs after all of them. Patterns with equal priority keep registration order, which follows file names

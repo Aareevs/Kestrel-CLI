@@ -22,6 +22,7 @@ var (
 func (c *Config) Masked() *Config {
 	out := *c
 	out.Redaction.ExtraPatterns = append([]string(nil), c.Redaction.ExtraPatterns...)
+	out.Patterns = append([]CustomPattern(nil), c.Patterns...)
 	out.Services = make([]Service, len(c.Services))
 	for i, s := range c.Services {
 		s.Command = maskCommand(s.Command)
