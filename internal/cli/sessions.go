@@ -39,7 +39,7 @@ func newSessionsCmd(g *globals) *cobra.Command {
 			"a unique prefix, or 'last'. By default only this project's sessions are considered; use --all for every project.",
 	}
 	groupCommand(cmd)
-	cmd.PersistentFlags().BoolVar(&all, "all", false, "consider sessions from every project, not just this one")
+	cmd.PersistentFlags().BoolVarP(&all, "all", "a", false, "consider sessions from every project, not just this one")
 
 	list := &cobra.Command{
 		Use:   "list",
@@ -62,6 +62,8 @@ func newSessionsCmd(g *globals) *cobra.Command {
 		}),
 	}
 	list.Flags().IntVarP(&limit, "limit", "n", 0, "show at most this many sessions (0 = all)")
+	// `kestrel sessions` on its own is the most common thing to want: the list.
+	cmd.RunE = list.RunE
 
 	show := &cobra.Command{
 		Use:   "show [id|last]",

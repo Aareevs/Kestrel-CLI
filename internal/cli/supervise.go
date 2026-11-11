@@ -64,8 +64,8 @@ func newRunCmd(g *globals) *cobra.Command {
 	}
 	// Everything after the command is passed to it untouched.
 	cmd.Flags().SetInterspersed(false)
-	cmd.Flags().StringVar(&name, "name", "", "service name for the command (default: program name)")
-	cmd.Flags().StringArrayVar(&svcs, "svc", nil, "additional service as name=\"shell command\" (repeatable)")
+	cmd.Flags().StringVarP(&name, "name", "n", "", "service name for the command (default: program name)")
+	cmd.Flags().StringArrayVarP(&svcs, "svc", "s", nil, "additional service as name=\"shell command\" (repeatable)")
 	cmd.Flags().DurationVar(&grace, "grace", 5*time.Second, "time to wait after SIGTERM before SIGKILL on shutdown")
 	return cmd
 }

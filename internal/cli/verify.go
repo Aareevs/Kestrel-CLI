@@ -62,10 +62,10 @@ func newVerifyCmd(g *globals) *cobra.Command {
 		}),
 	}
 	f := cmd.Flags()
-	f.BoolVar(&all, "all", false, "resolve the session among every project's sessions")
+	f.BoolVarP(&all, "all", "a", false, "resolve the session among every project's sessions")
 	f.BoolVar(&allowExec, "allow-exec", false, "run the command checks in verify.checks without asking")
-	f.IntVar(&o.Incident, "incident", 0, "incident number to verify (default: the latest)")
-	f.DurationVar(&o.Window, "window", app.DefaultVerifyWindow, "stability window: how long every check must keep passing")
+	f.IntVarP(&o.Incident, "incident", "I", 0, "incident number to verify (default: the latest)")
+	f.DurationVarP(&o.Window, "window", "w", app.DefaultVerifyWindow, "stability window: how long every check must keep passing")
 	f.DurationVar(&o.Interval, "interval", app.DefaultVerifyInterval, "time between samples within the window")
 	return cmd
 }
