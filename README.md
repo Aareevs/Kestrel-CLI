@@ -94,18 +94,22 @@ kestrel verify    # or: kestrel v
 | Quick Command | Full Command | Description |
 | :--- | :--- | :--- |
 | `kestrel w` / `kestrel start` | `kestrel watch` | Supervise stack in dependency order with live, classified logs |
-| `kestrel diag` | `kestrel diagnose` | Isolate root-cause hypotheses backed by immutable event IDs |
+| `kestrel diag` / `kestrel why` | `kestrel diagnose` | Isolate root-cause hypotheses backed by immutable event IDs |
 | `kestrel tl` / `kestrel time` | `kestrel timeline` | Chronological multi-service failure timeline |
 | `kestrel v` / `kestrel check` | `kestrel verify` | Verify runtime fix across continuous stability window |
 | `kestrel ins` / `kestrel info` | `kestrel inspect` | Detect technologies, service candidates, ports, and health routes |
 | `kestrel r` | `kestrel run` | Wrap any command with log classification and zero config |
 | `kestrel s` / `kestrel stat` | `kestrel status` | Current liveness vs. probe readiness per service |
-| `kestrel sess` | `kestrel sessions` | Browse, show, or export recorded incident sessions |
+| `kestrel sess` | `kestrel sessions` | Browse, show, or export recorded incident sessions (on its own: the list) |
 | `kestrel doc` | `kestrel doctor` | Check platform, permissions, SQLite storage, and tools |
 | `kestrel mcp` | `kestrel mcp` | Launch read-only stdio MCP server for AI coding agents |
 
 **Everyday Flag Shortcuts:**
 - `-j` / `--json`: Universal shorthand for JSON output across all commands (`kestrel diag -j`, `kestrel ins -j`, `kestrel s -j`, `kestrel tl -j`).
+- `-a` / `--all`: Search every project's sessions (`diagnose`, `timeline`, `verify`, `sessions`).
+- `-I` / `--incident N`: Just one incident of a session (`diagnose`, `timeline`, `verify`), numbered as in the report.
+- `-s` / `--service`: A service's own recorded output (`timeline`). `-w` / `--window`: the stability window (`verify`).
+- `-n` / `--name` and `-s` / `--svc`: Name the command, or add another service (`run`).
 - `-v` / `--verbose`: Diagnostic logging to stderr.
 - `-q` / `--quiet`: Suppress non-essential output.
 - `--project <dir>`: Target a specific project directory.
