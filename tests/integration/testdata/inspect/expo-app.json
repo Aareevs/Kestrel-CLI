@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "node"
+  ],
+  "candidates": [
+    {
+      "name": "pocket-ledger",
+      "dir": ".",
+      "technology": "node",
+      "framework": "expo",
+      "package_manager": "npm",
+      "command": {
+        "value": "npm start",
+        "confidence": "high",
+        "source": {
+          "file": "package.json",
+          "line": 6,
+          "note": "script: expo start"
+        }
+      },
+      "port": {
+        "value": 8081,
+        "confidence": "medium",
+        "source": {
+          "file": "package.json",
+          "line": 11,
+          "note": "expo default port"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:8081/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "sources": [
+        {
+          "file": "package.json"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "scan": {
+    "files_seen": 2,
+    "dirs_seen": 1,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}

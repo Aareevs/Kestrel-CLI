@@ -35,6 +35,10 @@ var nodeFrameworks = []nodeFramework{
 	{"@angular/core", "angular", "ng", 4200},
 	{"react-scripts", "create-react-app", "react-scripts", 3000},
 	{"vite", "vite", "vite", 5173},
+	// Expo and React Native run the Metro bundler, on 8081 unless told otherwise.
+	// Expo first: an Expo app depends on react-native too.
+	{"expo", "expo", "expo", 8081},
+	{"react-native", "react-native", "react-native", 8081},
 	{"@nestjs/core", "nestjs", "nest", 3000},
 	{"express", "express", "", 0},
 	{"fastify", "fastify", "", 0},
