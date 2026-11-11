@@ -14,7 +14,7 @@ import (
 // match it and every NoMatch line must not.
 func TestPatterns(t *testing.T) {
 	seen := map[string]bool{}
-	for _, p := range Patterns {
+	for _, p := range Patterns() {
 		t.Run(p.ID, func(t *testing.T) {
 			if seen[p.ID] {
 				t.Fatalf("duplicate pattern ID")
@@ -51,7 +51,7 @@ func TestPatterns(t *testing.T) {
 // TestPatternExamplesClassifyAsThemselves checks ordering: each Match example
 // must be claimed by its own pattern, not shadowed by an earlier one.
 func TestPatternExamplesClassifyAsThemselves(t *testing.T) {
-	for _, p := range Patterns {
+	for _, p := range Patterns() {
 		for _, line := range p.Match {
 			if got := Classify(line).PatternID; got != p.ID {
 				t.Errorf("%q classified as %q, want %q", line, got, p.ID)
@@ -176,7 +176,7 @@ func TestPatternsDocumented(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range Patterns {
+	for _, p := range Patterns() {
 		if !strings.Contains(string(doc), "`"+p.ID+"`") {
 			t.Errorf("docs/events.md does not document %s", p.ID)
 		}

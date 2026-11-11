@@ -43,18 +43,19 @@ tests on Linux, macOS, and Windows. If `proxy.golang.org` is flaky for you, `GOP
 
 ## Common contributions
 
-**A new error pattern** (a log shape Kestrel should recognize): add an entry to
-[`internal/events/patterns.go`](internal/events/patterns.go) with an ID, a type, a severity, a regex, and example
-lines it **must** match and **must not** match. The tests enforce both and check that no earlier pattern already
-claims your examples. Order matters (first match wins), so put specific shapes before generic ones. See
-[docs/events.md](docs/events.md).
+**A new error pattern** (a log shape Kestrel should recognize): register a `events.Pattern` from an `init()` (see
+[`internal/events/registry.go`](internal/events/registry.go)) with an ID, a type, a severity, a regex, and example
+lines it **must** match and **must not** match. `Register` checks those examples, and the tests check that no
+earlier pattern already claims them. Order matters (first match wins), so give it a `Priority` before any more
+generic pattern. See [docs/events.md](docs/events.md).
 
-**A new diagnosis rule**: add a type under `internal/diagnosis/rules/`, register it in `rules.All()`, document it in
+**A new diagnosis rule**: add a type under `internal/diagnosis/rules/`, register it with `rules.MustRegister`, document it in
 [docs/diagnosis-rules.md](docs/diagnosis-rules.md) (a test fails if you don't), and add a test with both a matching
 and a non-matching case. Every hypothesis must cite supporting events, give the factors behind its confidence, and
 suggest one next step for the user to run (Kestrel never runs it). The steps are in that doc's "Adding a rule".
 
-**A new ecosystem for `kestrel inspect`**: add an analyzer in `internal/discovery`, plus a fixture project under
+**A new ecosystem for `kestrel inspect`**: add an analyzer in `internal/discovery` and register it with
+`registerAnalyzer` (see `registry.go`), plus a fixture project under
 `tests/fixtures/projects/` and reviewed golden files. Discovery only reads files and never runs anything. Steps:
 [docs/testing.md](docs/testing.md#adding-a-discovery-fixture).
 

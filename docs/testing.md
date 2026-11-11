@@ -26,6 +26,11 @@ Review the diff line by line. A golden only proves output is stable. It doesn't 
 
 ## Adding a discovery fixture
 
+Ecosystems are analyzers registered in `internal/discovery/registry.go`. A new one lives in its own file and
+registers itself: `func init() { registerAnalyzer("elixir", 80, (*scanner).analyzeElixir) }`. Analyzers run in
+`(order, name)` order, never registration order. The built-ins use orders 10–70, so a new one takes 80 or more
+unless it must run earlier. The fixture steps are:
+
 1. Create `tests/fixtures/projects/<name>/` with the smallest realistic set of manifests.
 2. Add `<name>` to `fixtures` in `tests/integration/cli_test.go`.
 3. Run `make golden` and check every command, port, line number, and dependency in the new goldens against the

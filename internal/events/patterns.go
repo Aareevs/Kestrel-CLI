@@ -19,11 +19,16 @@ type Pattern struct {
 	Re          *regexp.Regexp
 	Match       []string
 	NoMatch     []string
+	// Priority orders patterns: lower runs first and the first match wins.
+	// Zero means PriorityDefault. Patterns with equal priority keep their
+	// registration order. See Register.
+	Priority int
 }
 
-// Patterns are tried in order; the first match wins, so specific shapes come
-// before generic ones.
-var Patterns = []Pattern{
+// builtinPatterns are Kestrel's own patterns, in match order (specific shapes
+// before generic ones). They are registered at start-up like any other
+// pattern, spaced PriorityStep apart so a new pattern can slot between them.
+var builtinPatterns = []Pattern{
 	{
 		ID:          "P001-port-in-use",
 		Description: "the process could not bind its port because something else holds it",
@@ -231,14 +236,9 @@ var Patterns = []Pattern{
 	},
 }
 
-// Pattern IDs are referenced from diagnosis rules and docs; keep them stable.
-var patternByID = func() map[string]*Pattern {
-	m := make(map[string]*Pattern, len(Patterns))
-	for i := range Patterns {
-		m[Patterns[i].ID] = &Patterns[i]
+func init() {
+	for i, p := range builtinPatterns {
+		p.Priority = (i + 1) * PriorityStep
+		MustRegister(p)
 	}
-	return m
-}()
-
-// PatternByID returns the pattern with id, or nil.
-func PatternByID(id string) *Pattern { return patternByID[id] }
+}

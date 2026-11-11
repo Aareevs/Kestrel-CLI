@@ -143,5 +143,7 @@ connection target is unknown, and when a supervised service owns the port (`K002
 1. Add a type in `internal/diagnosis/rules/` with an `ID()` of the form `K0NN-short-name` and an `Evaluate`.
    It reads only the `Context` (incident, graph, events, tail lines), never storage or the system.
 2. Every hypothesis must cite supporting events, give confidence factors, and suggest a next step.
-3. Register it in `rules.All()`, document it here (a test fails otherwise), and add a test in
-   `internal/diagnosis/diagnosis_test.go` with both a matching and a non-matching case.
+3. Register it with `rules.MustRegister(MyRule{})` from an `init()` (the built-ins do the same). The ID must match
+   `K0NN-short-name` and be unique; rules always run in ID order, so registration order doesn't matter. Document
+   it here (a test fails otherwise), and add a test in `internal/diagnosis/diagnosis_test.go` with both a matching
+   and a non-matching case.

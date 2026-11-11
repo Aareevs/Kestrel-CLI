@@ -37,10 +37,8 @@ type Rule interface {
 	Evaluate(c *Context) []api.Hypothesis
 }
 
-// All returns every rule, in ID order.
-func All() []Rule {
-	return []Rule{PortConflict{}, DependencyDown{}, CrashAfterStart{}, StartupFailure{}, DependencyNotRunning{}, MissingModule{}}
-}
+// All returns every registered rule, in ID order.
+func All() []Rule { return std.all() }
 
 func (c *Context) goos() string {
 	if c.GOOS != "" {
