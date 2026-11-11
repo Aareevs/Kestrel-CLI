@@ -314,3 +314,44 @@ func TestInteractivePicker(t *testing.T) {
 		t.Fatalf("non-TTY -i: exit %d\n%s%s", code, out, errs)
 	}
 }
+
+func TestWelcomeScreen(t *testing.T) {
+	// A fresh home and an empty project: the welcome screen reads, it never writes.
+	home, project := t.TempDir(), t.TempDir()
+	code, out, errs := pickRun(t, home, project, "", true, "--no-color")
+	if code != 0 || !strings.Contains(out, "Every failure has a trail.") || !strings.Contains(out, "█") ||
+		!strings.Contains(out, "nothing recorded for this project yet") || !strings.Contains(out, "kestrel inspect") {
+		t.Fatalf("welcome: exit %d\n%s%s", code, out, errs)
+	}
+	if strings.Contains(out, "Usage") || strings.Contains(out, "\x1b") {
+		t.Errorf("welcome should be neither help nor colored with --no-color:\n%s", out)
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("the welcome screen created files in the data directory: %v", entries)
+	}
+	if entries, _ := os.ReadDir(project); len(entries) != 0 {
+		t.Errorf("the welcome screen created files in the project: %v", entries)
+	}
+
+	// Anywhere but a terminal, or with --json / --quiet, bare kestrel is help, as before.
+	for name, c := range map[string]struct {
+		tty  bool
+		args []string
+	}{"piped": {false, nil}, "json": {true, []string{"--json"}}, "quiet": {true, []string{"-q"}}} {
+		code, out, _ := pickRun(t, home, project, "", c.tty, c.args...)
+		if code != 0 || !strings.Contains(out, "Get started") || strings.Contains(out, "█") {
+			t.Errorf("%s: should print help, exit %d\n%s", name, code, out)
+		}
+	}
+	// An unknown command is still an error, not a welcome.
+	if code, out, errs := pickRun(t, home, project, "", true, "bogus"); code != 2 || strings.Contains(out, "█") || !strings.Contains(errs, "bogus") {
+		t.Errorf("unknown command: exit %d\n%s%s", code, out, errs)
+	}
+
+	// With a failed session on record it reflects it and suggests what to do next.
+	h2, p2 := twoIncidents(t)
+	code, out, errs = pickRun(t, h2, p2, "", true, "--no-color")
+	if code != 0 || !strings.Contains(out, "last run") || !strings.Contains(out, "errors") || !strings.Contains(out, "kestrel why") {
+		t.Fatalf("welcome after a failure: exit %d\n%s%s", code, out, errs)
+	}
+}
