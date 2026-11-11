@@ -69,7 +69,7 @@ var builtinPatterns = []Pattern{
 		Type:        api.EventDependencyConnFailed,
 		Severity:    api.SeverityError,
 		Re: regexp.MustCompile(`(?i)(?:` +
-			`connection to server at "[^"]*" \([^)]*\), port (?P<port>\d+) failed` +
+			`connection to server at "[^"]*"(?: \([^)]*\))?, port (?P<port>\d+) failed` +
 			`|could not connect to server` +
 			`|the database system is (?:starting up|shutting down|in recovery mode)` +
 			`|pq: .*?(?:connection refused|password authentication failed|database "[^"]+" does not exist)` +
@@ -77,6 +77,7 @@ var builtinPatterns = []Pattern{
 		Match: []string{
 			`psql: error: connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused`,
 			"could not connect to server: Connection refused",
+			`PG::ConnectionBad: connection to server at "127.0.0.1", port 5432 failed: Connection refused`,
 			"FATAL:  the database system is starting up",
 			`pq: database "orders" does not exist`,
 			`FATAL:  password authentication failed for user "app"`,
@@ -118,6 +119,7 @@ var builtinPatterns = []Pattern{
 			`|ECONNREFUSED (?P<target2>\S+?:\d+)` +
 			`|proxying request \S+ to https?://(?P<target3>[^/\s]+)\S* \[ECONNREFUSED\]` +
 			`|connect ECONNREFUSED(?: (?P<target4>\S+?:\d+))?` +
+			`|Connection refused - connect\(2\) for "?[^"\s]+"? port (?P<port>\d+)` +
 			`|connection refused` +
 			`|Connection refused` +
 			`|actively refused it)`),
@@ -127,6 +129,7 @@ var builtinPatterns = []Pattern{
 			"Error: connect ECONNREFUSED 127.0.0.1:8080",
 			"[HPM] Error occurred while proxying request localhost:5173/api to http://localhost:8080/ [ECONNREFUSED]",
 			"requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8000): Connection refused",
+			`Errno::ECONNREFUSED: Connection refused - connect(2) for "127.0.0.1" port 6379`,
 		},
 		NoMatch: []string{"connection established to 127.0.0.1:5432"},
 	},
@@ -135,11 +138,12 @@ var builtinPatterns = []Pattern{
 		Description: "a hostname used to reach a dependency does not resolve",
 		Type:        api.EventDependencyConnFailed,
 		Severity:    api.SeverityError,
-		Re:          regexp.MustCompile(`(?i)(?:getaddrinfo (?:ENOTFOUND|EAI_AGAIN) (?P<target>\S+)|dial tcp: lookup (?P<target2>\S+?)(?: on \S+)?: no such host|Name or service not known|nodename nor servname provided)`),
+		Re:          regexp.MustCompile(`(?i)(?:getaddrinfo (?:ENOTFOUND|EAI_AGAIN) (?P<target>\S+)|dial tcp: lookup (?P<target2>\S+?)(?: on \S+)?: no such host|Name or service not known|nodename nor servname provided|could not translate host name "(?P<target3>[^"]+)")`),
 		Match: []string{
 			"Error: getaddrinfo ENOTFOUND db",
 			"dial tcp: lookup postgres on 127.0.0.11:53: no such host",
 			"socket.gaierror: [Errno -2] Name or service not known",
+			`PDOException: SQLSTATE[08006] [7] could not translate host name "db" to address: Temporary failure in name resolution`,
 		},
 		NoMatch: []string{"resolved db to 172.18.0.2"},
 	},
@@ -160,9 +164,10 @@ var builtinPatterns = []Pattern{
 		Description: "the process ran out of memory",
 		Type:        api.EventLogLine,
 		Severity:    api.SeverityFatal,
-		Re:          regexp.MustCompile(`(?:JavaScript heap out of memory|fatal error: runtime: out of memory|^MemoryError\b|java\.lang\.OutOfMemoryError)`),
-		Match:       []string{"FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory", "fatal error: runtime: out of memory", "java.lang.OutOfMemoryError: Java heap space"},
-		NoMatch:     []string{"memory usage: 120MB"},
+		Re:          regexp.MustCompile(`(?:JavaScript heap out of memory|fatal error: runtime: out of memory|^MemoryError\b|java\.lang\.OutOfMemoryError|Allowed memory size of \d+ bytes exhausted)`),
+		Match: []string{"FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory", "fatal error: runtime: out of memory", "java.lang.OutOfMemoryError: Java heap space",
+			"PHP Fatal error:  Allowed memory size of 134217728 bytes exhausted (tried to allocate 20480 bytes) in /app/x.php on line 9"},
+		NoMatch: []string{"memory usage: 120MB"},
 	},
 	{
 		ID:          "P009-go-panic",
@@ -200,13 +205,19 @@ var builtinPatterns = []Pattern{
 		Description: "a dependency or module is missing (not installed or wrong path)",
 		Type:        api.EventLogLine,
 		Severity:    api.SeverityError,
-		Re:          regexp.MustCompile(`(?:Error: Cannot find module|ModuleNotFoundError: No module named|ERR_MODULE_NOT_FOUND|cannot find package|no required module provides package|java\.lang\.ClassNotFoundException|NoClassDefFoundError|Could not find or load main class|Unable to access jarfile)`),
+		Re:          regexp.MustCompile(`(?:Error: Cannot find module|ModuleNotFoundError: No module named|ERR_MODULE_NOT_FOUND|cannot find package|no required module provides package|java\.lang\.ClassNotFoundException|NoClassDefFoundError|Could not find or load main class|Unable to access jarfile|Could not load file or assembly|You must install (?:or update )?\.NET|It was not possible to find any compatible framework|Could not find gem|Bundler::GemNotFound|cannot load such file --|Failed opening required|Class "[^"]+" not found)`),
 		Match: []string{
 			"Error: Cannot find module 'express'", "ModuleNotFoundError: No module named 'django'", "main.go:5:2: no required module provides package github.com/x/y",
 			"Caused by: java.lang.ClassNotFoundException: org.slf4j.LoggerFactory",
 			`Exception in thread "main" java.lang.NoClassDefFoundError: org/springframework/boot/SpringApplication`,
 			"Error: Could not find or load main class com.acme.Main",
 			"Error: Unable to access jarfile app.jar",
+			"Unhandled exception. System.IO.FileNotFoundException: Could not load file or assembly 'Dapper, Version=2.0.0.0'",
+			"You must install or update .NET to run this application.",
+			"Could not find gem 'rails (~> 7.0)' in locally installed gems.",
+			"/app/app.rb:1:in `require': cannot load such file -- sinatra (LoadError)",
+			`PHP Fatal error:  Uncaught Error: Class "App\\Models\\User" not found in /app/x.php:5`,
+			"PHP Fatal error:  Uncaught Error: Failed opening required 'vendor/autoload.php'",
 		},
 		NoMatch: []string{"loaded module express", "loaded class com.acme.Main"},
 	},
@@ -215,11 +226,14 @@ var builtinPatterns = []Pattern{
 		Description: "a test run reported failures",
 		Type:        api.EventTestFailed,
 		Severity:    api.SeverityError,
-		Re:          regexp.MustCompile(`(?:^--- FAIL: |^FAIL\s+\S+|^Tests:\s+\d+ failed|^=+ \d+ failed|^FAILED \S+|^(?:\[(?:ERROR|WARNING)\] )?Tests run:.*(?:Failures: [1-9]|Errors: [1-9])|^\d+ tests completed, \d+ failed|^> Task :\S*test FAILED)`),
+		Re:          regexp.MustCompile(`(?:^--- FAIL: |^FAIL\s+\S+|^Tests:\s+\d+ failed|^=+ \d+ failed|^FAILED \S+|^(?:\[(?:ERROR|WARNING)\] )?Tests run:.*(?:Failures: [1-9]|Errors: [1-9])|^\d+ tests completed, \d+ failed|^> Task :\S*test FAILED|^Failed!\s+- Failed:\s+[1-9]|^\d+ examples?, [1-9]\d* failures?|^\d+ runs, \d+ assertions, (?:[1-9]\d* failures|0 failures, [1-9]\d* errors)|^FAILURES!$|^Tests: \d+, Assertions: \d+, (?:Failures|Errors): [1-9])`),
 		Match: []string{"--- FAIL: TestCreateOrder (0.01s)", "FAIL\texample.com/orders\t0.123s", "Tests:       2 failed, 10 passed, 12 total", "===== 1 failed, 3 passed in 0.12s =====", "FAILED tests/test_api.py::test_create - AssertionError",
 			"[ERROR] Tests run: 5, Failures: 1, Errors: 0, Skipped: 0", "Tests run: 5, Failures: 0, Errors: 2, Skipped: 0",
-			"3 tests completed, 1 failed", "> Task :test FAILED"},
-		NoMatch: []string{"ok  \texample.com/orders\t0.1s", "PASS", "[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0", "> Task :test"},
+			"3 tests completed, 1 failed", "> Task :test FAILED",
+			"Failed!  - Failed:     1, Passed:     9, Skipped:     0, Total:    10", "10 examples, 2 failures",
+			"5 runs, 9 assertions, 1 failures, 0 errors, 0 skips", "FAILURES!", "Tests: 5, Assertions: 9, Failures: 1."},
+		NoMatch: []string{"ok  \texample.com/orders\t0.1s", "PASS", "[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0", "> Task :test",
+			"Passed!  - Failed:     0, Passed:    10, Skipped:     0, Total:    10", "10 examples, 0 failures", "OK (5 tests, 9 assertions)"},
 	},
 	{
 		ID:          "L001-listening",
@@ -232,7 +246,9 @@ var builtinPatterns = []Pattern{
 			`|Local:\s+https?://[^\s:/]+:(?P<port3>\d{2,5})` +
 			`|Starting development server at https?://[^\s:/]+:(?P<port4>\d{2,5})` +
 			`|(?:Tomcat|Jetty|Undertow|Netty) started on port(?:\(s\))?:? (?P<port5>\d{2,5})` +
-			`|Responding at https?://[^\s:/]+:(?P<port6>\d{2,5}))`),
+			`|Responding at https?://[^\s:/]+:(?P<port6>\d{2,5})` +
+			`|Rocket has launched from https?://[^\s:/]+:(?P<port7>\d{2,5})` +
+			`|Development Server \(https?://[^\s:/]+:(?P<port8>\d{2,5})\) started)`),
 		Match: []string{
 			"Listening on :8080",
 			"  ➜  Local:   http://localhost:5173/",
@@ -244,6 +260,8 @@ var builtinPatterns = []Pattern{
 			"Tomcat started on port(s): 8080 (http) with context path ''",
 			"Netty started on port 8080",
 			"Responding at http://0.0.0.0:8080",
+			"Rocket has launched from http://127.0.0.1:8000",
+			"Development Server (http://localhost:8000) started",
 		},
 		NoMatch: []string{"connecting to localhost:5432", "listen tcp :8080: bind: address already in use", "Tomcat initialized with port 8080 (http)"},
 	},
