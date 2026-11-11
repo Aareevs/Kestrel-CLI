@@ -55,18 +55,25 @@ Set `KESTREL_HOME` in the server's `env` if you use a non-default data directory
 
 | Tool | Arguments (all optional) | Returns (`pkg/api` type) |
 |---|---|---|
-| `get_diagnosis` | `session` | `DiagnosisReport`: incidents with ranked hypotheses, their supporting and contradicting event IDs, confidence and factors, and a suggested next step |
-| `get_failure_timeline` | `session`, `service`, `since` (e.g. `5m`), `limit` | `TimelineReport`: incident timelines, the dependency graph, past verifications, and with `service`, its recorded output |
+| `get_diagnosis` | `session`, `incident` (one incident, numbered as in the report) | `DiagnosisReport`: incidents with ranked hypotheses, their supporting and contradicting event IDs, confidence and factors, and a suggested next step |
+| `get_failure_timeline` | `session`, `incident`, `service`, `since` (e.g. `5m`), `limit` | `TimelineReport`: incident timelines, the dependency graph, past verifications, and with `service`, its recorded output |
 | `get_recent_errors` | `session`, `service`, `limit` (default 50, max 500) | `RecentErrors`: the latest error and fatal events |
 | `get_session_summary` | `session` | `SessionDetail`: final service state, counts by type, notable events |
 | `get_verification_results` | `session` | `VerificationResults`: past `kestrel verify` runs and the latest report in full |
 | `get_service_status` | `service` | `StatusReport`: liveness and readiness, live from a running session or from one probe of each configured service |
 | `list_services` | | `ServiceList`: services from `kestrel.yaml` (commands masked), or from the latest session |
 | `inspect_project` | `max_depth` | `InspectResult`: discovery's findings, each with source file:line and confidence |
+| `list_sessions` | `limit` (default 20, max 100) | `SessionList`: this project's recorded sessions, newest first, so an agent can pick a `session` id |
+| `search_events` | `query` (required), `session`, `service`, `type`, `min_severity`, `limit` (default 50, max 200) | `EventSearch`: the newest matching events, oldest first, with `truncated` when more matched |
+| `validate_config` | | `ConfigValidation`: whether `kestrel.yaml` is valid, and every problem with its line number (an error if there is no config) |
 
 `session` takes a full ID, a unique prefix, or `last` (the default: this project's latest). Each tool publishes
 an input schema and an output schema, and returns its result both as structured content and as JSON text. A
 problem (no such session, a bad argument) comes back as a tool error with a message, not a protocol failure.
+
+`search_events` matches a plain substring of the recorded message (ASCII case-insensitive). The text is bound as
+a query parameter, and `%`, `_` and quotes are ordinary characters: it is not a pattern language. The query is
+required and limited to 200 bytes. It searches one session and only already-redacted, recorded events.
 
 `get_service_status` is the only tool that touches anything outside Kestrel's own data. Without a running
 session, it makes one connection attempt to each configured health probe address, as `kestrel status` does.

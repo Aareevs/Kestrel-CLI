@@ -19,7 +19,7 @@ import (
 )
 
 var mcpTools = []string{"get_diagnosis", "get_failure_timeline", "get_recent_errors", "get_service_status",
-	"get_session_summary", "get_verification_results", "inspect_project", "list_services"}
+	"get_session_summary", "get_verification_results", "inspect_project", "list_services", "list_sessions", "search_events", "validate_config"}
 
 // connectMCP starts the real `kestrel mcp` binary and connects the official
 // SDK client to it over stdio.
@@ -80,7 +80,7 @@ func TestMCPRealDiagnosisAndRedaction(t *testing.T) {
 		t.Fatalf("initialize: %+v", got)
 	}
 
-	// Exactly the eight documented tools, every one read-only and closed-world.
+	// Exactly the documented tools, every one read-only and closed-world.
 	tl, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +134,8 @@ func TestMCPRealDiagnosisAndRedaction(t *testing.T) {
 		{"get_service_status", nil},
 		{"list_services", nil},
 		{"inspect_project", nil},
+		{"list_sessions", nil},
+		{"search_events", map[string]any{"query": "e"}},
 	} {
 		res, wire := call(t, cs, c.tool, c.args)
 		if res.IsError {
@@ -253,5 +255,80 @@ func TestMCPInProcess(t *testing.T) {
 	cancel()
 	if code := <-done; code != 0 {
 		t.Fatalf("mcp exit %d", code)
+	}
+}
+
+func TestMCPSessionsSearchIncidentsAndConfig(t *testing.T) {
+	home, project := twoIncidents(t)
+	cs := connectMCP(t, home, project)
+
+	res, wire := call(t, cs, "list_sessions", map[string]any{"limit": 5})
+	sl := structured[api.SessionList](t, res)
+	if res.IsError || len(sl.Sessions) != 1 || sl.Sessions[0].Mode != "run" || sl.AllProjects {
+		t.Fatalf("list_sessions: %s", wire)
+	}
+	id := sl.Sessions[0].ID
+
+	// Searching: case-insensitive, by service, by severity, and bounded.
+	res, wire = call(t, cs, "search_events", map[string]any{"query": "THE SECOND failure"})
+	se := structured[api.EventSearch](t, res)
+	if res.IsError || se.Session.ID != id || len(se.Events) == 0 {
+		t.Fatalf("search: %s", wire)
+	}
+	for _, e := range se.Events {
+		if e.ServiceID != "second" || !strings.Contains(strings.ToLower(e.Message), "the second failure") {
+			t.Errorf("unexpected match %+v", e)
+		}
+	}
+	res, _ = call(t, cs, "search_events", map[string]any{"query": "failure", "service": "first", "min_severity": "error"})
+	if se = structured[api.EventSearch](t, res); len(se.Events) == 0 || se.Events[0].ServiceID != "first" {
+		t.Errorf("filtered search: %+v", se.Events)
+	}
+	res, _ = call(t, cs, "search_events", map[string]any{"query": "failure", "limit": 1})
+	if se = structured[api.EventSearch](t, res); len(se.Events) != 1 || !se.Truncated {
+		t.Errorf("limit 1: %d events, truncated %v", len(se.Events), se.Truncated)
+	}
+	// SQL and LIKE wildcards are just text: "fa_lure" would match "failure" if _ were a wildcard.
+	for _, q := range []string{"' OR 1=1 --", "f%e", "fa_lure", `"; DROP TABLE events; --`} {
+		res, wire = call(t, cs, "search_events", map[string]any{"query": q})
+		if res.IsError || len(structured[api.EventSearch](t, res).Events) != 0 {
+			t.Errorf("query %q should match nothing: %s", q, wire)
+		}
+	}
+	// Bad arguments are tool errors, not protocol failures.
+	for name, args := range map[string]map[string]any{
+		"empty query":  {"query": "  "},
+		"long query":   {"query": strings.Repeat("x", 201)},
+		"bad severity": {"query": "x", "min_severity": "loud"},
+		"no session":   {"query": "x", "session": "nope"},
+	} {
+		if res, wire := call(t, cs, "search_events", args); !res.IsError {
+			t.Errorf("%s: expected a tool error: %s", name, wire)
+		}
+	}
+
+	// One incident at a time.
+	res, _ = call(t, cs, "get_diagnosis", map[string]any{"incident": 2})
+	if d := structured[api.DiagnosisReport](t, res); len(d.Incidents) != 1 || d.Incidents[0].Incident.Number != 2 {
+		t.Errorf("get_diagnosis incident 2: %+v", d.Incidents)
+	}
+	res, _ = call(t, cs, "get_failure_timeline", map[string]any{"incident": 1})
+	if tr := structured[api.TimelineReport](t, res); len(tr.Incidents) != 1 || tr.Incidents[0].Number != 1 {
+		t.Errorf("get_failure_timeline incident 1: %+v", tr.Incidents)
+	}
+	if res, wire := call(t, cs, "get_diagnosis", map[string]any{"incident": 9}); !res.IsError {
+		t.Errorf("incident 9 should be an error: %s", wire)
+	}
+
+	// validate_config: no file is an error; a good and a bad file.
+	if res, wire := call(t, cs, "validate_config", nil); res.IsError {
+		t.Fatalf("project has a kestrel.yaml: %s", wire)
+	} else if cv := structured[api.ConfigValidation](t, res); !cv.Valid {
+		t.Errorf("valid config reported invalid: %+v", cv)
+	}
+	os.WriteFile(filepath.Join(project, "kestrel.yaml"), []byte("version: 1\nservices:\n  - name: api\n    port: nope\n"), 0o644)
+	res, _ = call(t, cs, "validate_config", nil)
+	if cv := structured[api.ConfigValidation](t, res); cv.Valid || len(cv.Issues) == 0 || cv.Issues[0].Line == 0 {
+		t.Errorf("bad config: %+v", cv)
 	}
 }

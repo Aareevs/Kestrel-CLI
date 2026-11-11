@@ -157,6 +157,9 @@ claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 | `get_service_status` | Current liveness and readiness state across supervised services |
 | `list_services` | Configured service manifests with secrets masked |
 | `inspect_project` | Static technology discovery findings and inferred dependencies |
+| `list_sessions` | This project's recorded sessions, newest first, to pick a session id from |
+| `search_events` | Find recorded events by text, service, type or severity (plain substring, not a pattern) |
+| `validate_config` | Check `kestrel.yaml` and list every problem with its line number |
 
 - **Strictly Read-Only**: The MCP server never starts, stops, or signals processes.
 - **Zero-Trust Log Handling**: Log text is delivered as data, never instructions.
