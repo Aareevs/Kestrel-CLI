@@ -15,6 +15,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/Aareevs/Kestrel-CLI/internal/app"
+	"github.com/Aareevs/Kestrel-CLI/internal/buildinfo"
 	"github.com/Aareevs/Kestrel-CLI/internal/output"
 )
 
@@ -130,6 +131,12 @@ func (g *globals) app() (*app.App, error) {
 	return a, nil
 }
 
+// canWelcome reports whether the welcome screen fits: output (and input) is an
+// interactive terminal and the user asked for neither JSON nor quiet.
+func (g *globals) canWelcome() bool {
+	return g.streams.OutIsTTY && g.streams.InIsTTY && !g.jsonFlag && g.format != "json" && !g.quiet
+}
+
 // NewRootCmd builds the command tree.
 func NewRootCmd(s Streams) *cobra.Command {
 	root, _ := newRoot(s)
@@ -145,6 +152,20 @@ func newRoot(s Streams) (*cobra.Command, *globals) {
 			"ranks evidence-backed root-cause hypotheses, and verifies whether your fix worked.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// A bare `kestrel` at a terminal opens the welcome screen. Anywhere
+		// else (pipes, --json, --quiet) it prints help, as it always did.
+		RunE: runE(func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 || !g.canWelcome() {
+				return cmd.Help()
+			}
+			a, err := g.app()
+			if err != nil {
+				return err
+			}
+			output.Welcome(g.streams.Out, a.Welcome(cmd.Context(), buildinfo.Info().Version),
+				output.TextOptions{Style: g.style, Width: output.TerminalWidth(g.streams.Out)})
+			return nil
+		}),
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			if g.jsonFlag {
 				g.format = "json"
