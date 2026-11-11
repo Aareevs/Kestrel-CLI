@@ -462,6 +462,45 @@ func TestMissingCodeAdviceMatchesTheRuntime(t *testing.T) {
 	}
 }
 
+// Docker's "port is already allocated" names a host port that is often held by
+// another container, so the next step lists containers before asking about processes.
+func TestDockerPortAllocatedSuggestsDockerPs(t *testing.T) {
+	s := newStream()
+	s.started(0, "stack")
+	s.line(100, "stack", "db-1  | ")
+	s.line(200, "stack", "Error response from daemon: driver failed programming external connectivity on endpoint db (ab12cd): Bind for 0.0.0.0:5432 failed: port is already allocated")
+	s.crash(250, "stack", 1)
+	d := diagnose(t, api.Topology{Services: []api.ServiceTopology{{Name: "stack"}}}, s)[0]
+	top := d.Hypotheses[0]
+	if top.RuleID != "K001-port-conflict" || !strings.Contains(top.Title, "port 5432 is already in use") ||
+		top.NextStep.Command != `docker ps --filter "publish=5432"` || !strings.Contains(top.Explanation, "Docker could not publish port 5432") ||
+		!strings.Contains(top.NextStep.Description, "never stops containers") {
+		t.Fatalf("top: %+v\nall: %s", top, ruleIDs(d))
+	}
+}
+
+// A stack whose Docker daemon is down fails at startup with the daemon's message
+// as its cause, and no dependency link is invented from a message with no target.
+func TestDockerDaemonDownIsAStartupFailureWithACause(t *testing.T) {
+	s := newStream()
+	s.started(0, "stack")
+	s.line(100, "stack", "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?")
+	s.crash(150, "stack", 1)
+	d := diagnose(t, api.Topology{Services: []api.ServiceTopology{{Name: "stack"}}}, s)[0]
+	var k004 *api.Hypothesis
+	for i, h := range d.Hypotheses {
+		if h.RuleID == "K004-startup-failure" {
+			k004 = &d.Hypotheses[i]
+		}
+		if h.RuleID == "K005-dependency-not-running" {
+			t.Fatalf("a daemon message has no target, so K005 must stay silent: %s", ruleIDs(d))
+		}
+	}
+	if k004 == nil || k004.Confidence.Level != api.ConfidenceHigh || !strings.Contains(k004.Title, "Cannot connect to the Docker daemon") {
+		t.Fatalf("got %s", ruleIDs(d))
+	}
+}
+
 func TestDependentAlreadyFailingIsContradiction(t *testing.T) {
 	s := newStream()
 	s.line(0, "api", "dial tcp 127.0.0.1:5432: connect: connection refused") // before the db failed

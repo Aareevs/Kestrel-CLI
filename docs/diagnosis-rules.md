@@ -59,7 +59,9 @@ Windows equivalent), or wasn't permitted to (`EACCES`, `bind: permission denied`
 contradicting evidence (it did get a port) and lowers the level one step.
 
 **Next step:** `lsof -nP -iTCP:<port> -sTCP:LISTEN` (`netstat -ano | findstr :<port>` on Windows) to see who holds
-the port. Kestrel never signals that process. For permission failures, use a port above 1024.
+the port. Kestrel never signals that process. For permission failures, use a port above 1024. For Docker's "port is
+already allocated" (pattern `P035`), the holder is often another container, so the step is `docker ps --filter
+"publish=<port>"`; Kestrel never stops containers it didn't start.
 
 ### `K002-dependency-down`
 
@@ -100,7 +102,11 @@ separately from the hypothesis ("caused by what it logged just before exiting").
 **Detects:** a service that crashed before ever becoming ready, or never passed its readiness probe
 (`startup_timeout`). It defers to `K001` when a bind failure explains the start-up failure.
 
-**Evidence:** the most telling error line from its startup output, and the crash or timeout.
+**Evidence:** the most telling error line from its startup output, and the crash or timeout. The "most telling
+line" is the last fatal one, else the last error one, whether it is plain output or a connection failure **with no
+target** (the Docker daemon being down, a database login failing): nothing can link those to another service, so
+they are the cause themselves. A connection failure that names a target is evidence about a dependency, and is
+handled through the dependency graph instead.
 
 **Confidence:**
 

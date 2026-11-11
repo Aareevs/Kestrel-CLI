@@ -164,9 +164,10 @@ var builtinPatterns = []Pattern{
 		Description: "the process ran out of memory",
 		Type:        api.EventLogLine,
 		Severity:    api.SeverityFatal,
-		Re:          regexp.MustCompile(`(?:JavaScript heap out of memory|fatal error: runtime: out of memory|^MemoryError\b|java\.lang\.OutOfMemoryError|Allowed memory size of \d+ bytes exhausted)`),
+		Re:          regexp.MustCompile(`(?:JavaScript heap out of memory|fatal error: runtime: out of memory|^MemoryError\b|java\.lang\.OutOfMemoryError|Allowed memory size of \d+ bytes exhausted|OOMKilled|Out of memory: Kill(?:ed)? process)`),
 		Match: []string{"FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory", "fatal error: runtime: out of memory", "java.lang.OutOfMemoryError: Java heap space",
-			"PHP Fatal error:  Allowed memory size of 134217728 bytes exhausted (tried to allocate 20480 bytes) in /app/x.php on line 9"},
+			"PHP Fatal error:  Allowed memory size of 134217728 bytes exhausted (tried to allocate 20480 bytes) in /app/x.php on line 9",
+			`"OOMKilled": true`, "Out of memory: Killed process 4821 (node) total-vm:2048000kB"},
 		NoMatch: []string{"memory usage: 120MB"},
 	},
 	{

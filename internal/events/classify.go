@@ -26,6 +26,20 @@ var (
 	levelHeadRe = regexp.MustCompile(`^(?i:(error|warning|warn|fatal))(?:\[[^\]]*\])?:\s`)
 )
 
+// composePrefixRe is the prefix `docker compose up` puts on every line of a
+// container's output: "api-1  | " (Compose v2) or "api_1  | " (v1).
+var composePrefixRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*[-_]\d+\s+\| ?`)
+
+// stripComposePrefix removes a compose container prefix, so that a pattern
+// anchored to the start of a line (`panic:`, `Traceback`) still recognizes the
+// container's own output. Classification only: the stored message keeps it.
+func stripComposePrefix(line string) string {
+	if loc := composePrefixRe.FindStringIndex(line); loc != nil {
+		return line[loc[1]:]
+	}
+	return line
+}
+
 func parseLevel(s string) api.Severity {
 	switch strings.ToLower(s) {
 	case "debug", "trace", "10", "20":
@@ -74,6 +88,7 @@ func Level(line string) (api.Severity, bool) {
 func Classify(line string) Classification { return classify(load(), line) }
 
 func classify(set *patternSet, line string) Classification {
+	line = stripComposePrefix(line)
 	c := Classification{Type: api.EventLogLine, Severity: api.SeverityInfo}
 	if lvl, ok := Level(line); ok {
 		c.Severity, c.Explicit = lvl, true

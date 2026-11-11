@@ -179,8 +179,9 @@ claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 
 Detection (above) is separate from diagnosis: `kestrel diagnose` recognizes failures from the output itself, whatever
 the stack. That includes Java and Kotlin (Spring Boot, JDBC, Maven/Gradle), Rust (panics, cargo), .NET (unhandled
-exceptions, Kestrel, MSBuild), Ruby and Rails, and PHP and Laravel: crashes, port and database failures, missing
-code, and build and test failures. You can add your own shapes in `kestrel.yaml`. See
+exceptions, Kestrel, MSBuild), Ruby and Rails, PHP and Laravel, and Docker and Compose (daemon, ports, images,
+builds, the compose file, container exits): crashes, port and database failures, missing code, and build and test
+failures. You can add your own shapes in `kestrel.yaml`. See
 [docs/events.md](docs/events.md).
 
 ---

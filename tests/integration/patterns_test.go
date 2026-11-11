@@ -145,3 +145,48 @@ func TestRustPanicAfterHealthyStartEndToEnd(t *testing.T) {
 		t.Fatalf("top: %+v", top)
 	}
 }
+
+// `docker compose up` prefixes every line with the container's name. Kestrel
+// classifies the container's own output regardless, but stores the line as
+// printed. Docker's own failures are recognized too.
+func TestComposeOutputIsClassifiedAndStoredAsPrinted(t *testing.T) {
+	_, fake := buildBins(t)
+	home, project := t.TempDir(), t.TempDir()
+	project, _ = filepath.EvalSymlinks(project)
+	code, out, errs := kestrelCmd(t, home, project, "run", "--quiet", "--name", "stack", "--format", "json", "--",
+		fake, "--name", "stack",
+		"--say", "api-1  | panic: runtime error: index out of range",
+		"--say", "web-1  | Error: connect ECONNREFUSED 127.0.0.1:59871",
+		"--say", "Error response from daemon: driver failed programming external connectivity on endpoint db (ab12): Bind for 0.0.0.0:15432 failed: port is already allocated",
+		"--exit-after", "400ms", "--exit-code", "1")
+	if code != 1 {
+		t.Fatalf("run exit %d\n%s%s", code, out, errs)
+	}
+	byPattern := map[string]api.Event{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if e := decode[api.Event](t, line); e.Attrs.PatternID != "" {
+			byPattern[e.Attrs.PatternID] = e
+		}
+	}
+	if e := byPattern["P009-go-panic"]; e.Severity != api.SeverityFatal || !strings.HasPrefix(e.Message, "api-1  | panic:") {
+		t.Fatalf("the prefixed panic: %+v", e)
+	}
+	if e := byPattern["P006-connection-refused"]; e.Type != api.EventDependencyConnFailed || e.Attrs.Target != "127.0.0.1:59871" || e.Attrs.Port != 59871 {
+		t.Fatalf("the prefixed refusal: %+v", e)
+	}
+	if e := byPattern["P035-docker-port-allocated"]; e.Type != api.EventPortBindFailed || e.Attrs.Port != 15432 {
+		t.Fatalf("docker's port error: %+v", e)
+	}
+	// Diagnosis explains the port conflict the Docker way.
+	_, diag, _ := kestrelCmd(t, home, project, "diagnose", "--format", "json")
+	rep := decode[api.DiagnosisReport](t, diag)
+	var step string
+	for _, h := range rep.Incidents[0].Hypotheses {
+		if h.RuleID == "K001-port-conflict" {
+			step = h.NextStep.Command
+		}
+	}
+	if step != `docker ps --filter "publish=15432"` {
+		t.Fatalf("K001's next step = %q", step)
+	}
+}
