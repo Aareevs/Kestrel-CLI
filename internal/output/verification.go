@@ -78,7 +78,7 @@ func Verification(w io.Writer, r *api.VerificationReport, o TextOptions) {
 	evidenceBlock(w, "Recovery recorded", r.Recovery, s.Green("✓"), o)
 
 	if len(r.Checks) == 0 {
-		fmt.Fprintf(w, "\n  %s %s\n", s.Bold("Checks"), s.Dim("none could be chosen"))
+		fmt.Fprintf(w, "\n  %s %s\n", s.Bold("Checks"), s.Dim("(none could be chosen)"))
 	} else {
 		fmt.Fprintf(w, "\n  %s %s\n", s.Bold("Checks"), s.Dim(fmt.Sprintf("(every %s across a %s window)", r.Interval, r.Window)))
 	}
