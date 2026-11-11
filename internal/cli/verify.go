@@ -116,8 +116,12 @@ func verifyPlanLine(g *globals, p app.VerifyPlan) {
 			what += ", live"
 		}
 	}
-	fmt.Fprintf(g.streams.Err, "%s %s: %d %s every %s for %s",
-		s.Bold("Verifying"), what, p.Probes, plural(p.Probes, "check", "checks"), p.Interval, roundDur(p.Window))
+	if p.Window == 0 {
+		fmt.Fprintf(g.streams.Err, "%s %s: nothing to sample, so no stability window", s.Bold("Verifying"), what)
+	} else {
+		fmt.Fprintf(g.streams.Err, "%s %s: %d %s every %s for %s",
+			s.Bold("Verifying"), what, p.Probes, plural(p.Probes, "check", "checks"), p.Interval, roundDur(p.Window))
+	}
 	if p.Commands > 0 {
 		fmt.Fprintf(g.streams.Err, ", then %d %s", p.Commands, plural(p.Commands, "command", "commands"))
 	}

@@ -54,7 +54,8 @@ type VerifyOptions struct {
 	OnCommand func(verification.Command)
 }
 
-// VerifyPlan describes what verify is about to do.
+// VerifyPlan describes what verify is about to do. Window is zero when there is
+// nothing to sample, so the window is skipped.
 type VerifyPlan struct {
 	SessionID string
 	Live      bool
@@ -171,6 +172,9 @@ func (a *App) Verify(ctx context.Context, ref string, all bool, o VerifyOptions)
 	w.Poll = poll
 	if o.OnPlan != nil {
 		p := VerifyPlan{Live: rep.Live, Incident: inN, Probes: len(probes), Commands: len(cmds), Window: w.Duration, Interval: w.Interval}
+		if len(probes) == 0 && !rep.Live {
+			p.Window = 0
+		}
 		if an != nil {
 			p.SessionID = an.summary.ID
 		}
@@ -178,7 +182,13 @@ func (a *App) Verify(ctx context.Context, ref string, all bool, o VerifyOptions)
 	}
 
 	rep.StartedAt = a.Now()
-	sampled := verification.Run(ctx, w, probes)
+	// With nothing to sample and no live session to compare, waiting out the
+	// window would only delay the answer: skip straight to the verdict (and to
+	// any authorized commands, which run once, not across the window).
+	sampled := verification.Sampled{Complete: true}
+	if len(probes) > 0 || rep.Live {
+		sampled = verification.Run(ctx, w, probes)
+	}
 	rep.Checks = append(rep.Checks, sampled.Checks...)
 	if sampled.PollErr != nil {
 		rep.Notes = append(rep.Notes, "could not read new session events: "+sampled.PollErr.Error())
@@ -269,7 +279,7 @@ func pickIncident(ins []*correlation.Incident, n int) (*correlation.Incident, in
 			return in, n, nil
 		}
 	}
-	return nil, 0, usage("no incident #%d in this session (it has %d)", n, len(ins))
+	return nil, 0, usageNext("kestrel timeline    lists the session's incidents", "no incident #%d in this session (it has %d)", n, len(ins))
 }
 
 // beforeEvidence is what was failing: the leading hypothesis's supporting
