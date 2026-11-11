@@ -112,6 +112,7 @@ type InspectResult struct {
 	Root          string             `json:"root"`
 	Technologies  []string           `json:"technologies"`
 	Candidates    []ServiceCandidate `json:"candidates"`
+	Workspaces    []Workspace        `json:"workspaces,omitempty"`
 	ConfigFile    string             `json:"config_file,omitempty"`
 	Scan          ScanStats          `json:"scan"`
 	Warnings      []string           `json:"warnings,omitempty"`
@@ -173,4 +174,24 @@ type VersionInfo struct {
 	Date          string `json:"date"`
 	GoVersion     string `json:"go_version"`
 	Platform      string `json:"platform"`
+}
+
+// Workspace is a monorepo workspace found in the project: a pnpm, npm or yarn
+// workspace, a Go workspace (go.work), or a Cargo workspace.
+type Workspace struct {
+	// Kind is pnpm, npm, yarn, bun, go, or cargo.
+	Kind string `json:"kind"`
+	// Root is the workspace's directory ("." for the project root).
+	Root string `json:"root"`
+	// File declares the workspace (pnpm-workspace.yaml, package.json, go.work, Cargo.toml).
+	File string `json:"file"`
+	// Members are the member directories, sorted and relative to the project root.
+	Members []string `json:"members"`
+	// Services are the members that became service candidates; the rest are
+	// libraries or otherwise not runnable.
+	Services []string `json:"services"`
+	// Orchestrator is set when the root's own script only runs the members
+	// (for example `turbo run dev`). That script isn't listed as a service,
+	// since its members are listed individually.
+	Orchestrator string `json:"orchestrator,omitempty"`
 }

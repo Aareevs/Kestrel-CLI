@@ -29,6 +29,7 @@ func (s *scanner) analyze() []api.ServiceCandidate {
 		}
 	}
 
+	cands, s.workspaceReport = s.applyWorkspaces(cands)
 	cands = mergeCompose(cands)
 	cands = s.applyDockerfiles(cands)
 	s.applyEnvExamples(cands)

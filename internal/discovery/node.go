@@ -116,6 +116,7 @@ func (s *scanner) analyzeNode(dir string) []*candidate {
 	case script != "":
 		src := api.Source{File: file, Line: lineOf(raw, `"`+script+`"`), Note: "script: " + scriptBody}
 		c.setCommand(nodeRun(c.PackageManager, script), api.ConfidenceHigh, src)
+		c.script = scriptBody
 		if p, _ := findPort([]byte(scriptBody), scriptPortRe); p > 0 {
 			c.offerPort(p, api.ConfidenceHigh, api.Source{File: file, Line: src.Line, Note: "port flag in \"" + script + "\" script"})
 		}
