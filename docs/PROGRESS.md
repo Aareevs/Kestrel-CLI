@@ -614,3 +614,99 @@ The GitHub Actions workflow is written but hasn't run yet: there's no remote.
   profiles are ignored.
 - (Resolved after Phase 2: MIT license added.)
 - `docs/assets/demo.gif` hasn't been generated (VHS isn't installed). Only the `.tape` is committed.
+
+---
+
+## v1.1.0 (prepared 2026-11-12, not tagged)
+
+Twenty-one pull requests (#11-#30 on GitHub; the last one is this release prep). Nothing is tagged or published: that
+is the owner's decision. Release notes: [releases/v1.1.0.md](releases/v1.1.0.md). Changelog:
+[../CHANGELOG.md](../CHANGELOG.md).
+
+### What was built
+
+| PR | Change |
+|---|---|
+| #11 | Registries for patterns, rules and analyzers: each extended in one file, validated when registered |
+| #12 | Custom error patterns in `kestrel.yaml`, validated with line numbers, with required match / no-match examples |
+| #13-#15 | Error patterns for Java/Kotlin, Rust, .NET, Ruby/Rails, PHP/Laravel, and Docker/Compose |
+| #16 | `kestrel inspect` for Elixir/Phoenix, .NET, Deno, Bun |
+| #17 | Monorepo and workspace discovery (pnpm, npm, yarn, Bun, Go, Cargo) under a safety budget |
+| #18 | Width-aware terminal output, grouped `--help`, `next:` hints |
+| #19 | `why`, short flags, `-I/--incident`, bare `kestrel sessions` |
+| #20 | Interactive session and incident picker (`-i`), terminal only |
+| #21 | Welcome screen for bare `kestrel`, read-only |
+| #22 | Pinned status table for `watch` (scroll region), with a small test terminal emulator |
+| #23 | `kestrel mcp init` / `mcp config` |
+| #24 | MCP tools `list_sessions`, `search_events`, `validate_config`, and `incident` arguments |
+| #25, #26 | Dogfooding rounds 1 and 2 (real projects, real tools failing) |
+| #27 | Known gaps: repeat summaries, weak incidents, skipped checks, unrecognized output |
+| #28 | JSON Schemas for `diagnose`, `timeline`, `verify`; `kestrel schema` |
+| #29 | `verify` Markdown and JUnit reports |
+| #30 | Extension guide and ecosystem matrix |
+| #31 | This release prep |
+
+### Exit criteria and evidence
+
+| Criterion | Evidence |
+|---|---|
+| Every registry rejects a bad registration | `internal/events`, `internal/diagnosis/rules` and `internal/discovery` registry tests (panic or error on bad ID, duplicate, missing examples, shadowed example) |
+| A project pattern works without code | `tests/integration/patterns_test.go`; also run by hand: `config validate`, then `run`, then the event carries `pattern_id: U001-…` |
+| Real output matches the published schemas | `validateSchema` in the integration tests: every incident scenario, every `verify` test, `-I`/`--service`/`--since` variants; `TestCommittedSchemasAreCurrent` fails if a type changes without `make schemas` |
+| The pinned table stays put while logs scroll | `internal/output/pane_test.go` and `tests/integration/pane_test.go` replay Kestrel's real bytes through `internal/termtest` and assert on the screen; also run in a real pty |
+| CI reports can't carry markup from process output | golden and hostile-content tests for both formats; structural checks (XML well-formed, counts add up, every table row has four cells) |
+| Nothing was published | no tag, no release, no tap push; no workflow has run for any of these PRs |
+
+### Bugs found
+
+Found by running real tools and real projects (dogfooding), not by the unit tests, all fixed with tests:
+
+- Expo and React Native apps had no framework or port.
+- Node's `node:internal/…:N` location line was classified fatal and picked as the cause.
+- A generic "failed during startup" hypothesis ranked above "missing a dependency".
+- The port-conflict diagnosis claimed an unknown process held a port that another service of the same session held.
+- Python block-buffered output on Kestrel's pipe, losing banners and last errors.
+- Redaction missed `redis://:password@host` and a prose AWS secret key.
+- The CLI printed stored text without re-redacting it with current rules (only export and MCP did).
+- A dependent's continuing refusals formed a bogus second incident; unrelated errors chained into one huge weak incident.
+- A skipped check still allowed `resolved`; a crash with unrecognized output was reported as "no error".
+- Steady repeats were only summarized at the end of a run (up to 10s), so short `verify` windows never saw them.
+- `verify` waited out its window with nothing to sample (#18).
+
+Caught by my own new tests before merging (not release bugs): typed-ahead keys lost between pickers, the welcome
+tagline overflowing at 30 columns, an irrelevant line quoted for startup timeouts, the schema generator dropping map
+value types, Markdown code fences forgeable by hostile log text, and a documentation example that hid an exit code.
+One pre-existing flaky test (`TestVerifyCommandFailureTimeoutAndRedaction`, failing 2 of 6 runs on `main`) was fixed.
+
+### Quality checks (run 2026-11-12 on darwin/arm64, go1.26.2, branch `v1.1/21-release-prep`)
+
+| Check | Result |
+|---|---|
+| `gofmt -l .` | no output |
+| `make check` (vet, test, race, build, cross-compiles) | pass |
+| `make lint` (staticcheck 2025.1.1) | pass |
+| `GOOS=windows go vet ./...` | pass (vetted, **not run**) |
+| `make release-check` | `.goreleaser.yaml` valid |
+| `make release-snapshot` | succeeded: darwin amd64/arm64, linux amd64/arm64, windows amd64; the darwin/arm64 binary runs (`version`, `schema`, `mcp config`) |
+| Coverage (`-short`, `-coverpkg=./internal/...,./pkg/...`) | 88.1% of statements; 303 test functions |
+| Timing-sensitive tests | run `-count=3..5 -race` under 6 busy-loop CPU hogs (collectors, correlation, verification, verify/scenario/supervision integration tests, welcome, picker, pane) |
+
+Important tests were mutation-checked: the code was broken on purpose and the test confirmed to fail (for example the
+pinned table's scroll region, cursor restore and cleanup; the skipped-check verdict rule; both new redaction rules;
+the weak-link anchoring; the schema currency and validation tests; the Markdown escaping).
+
+### Known gaps and limitations
+
+- **CI has not run on any of this** (kept off to save Actions credits). Windows is vetted and cross-compiled, never
+  run: command checks, Job Object stops, the picker's raw mode, and the (disabled-on-Windows) pinned table are
+  untested there. Run CI once before tagging.
+- The pinned table and picker were verified through a pty and an emulator, not by eye in Terminal.app, iTerm or
+  Windows Terminal.
+- The GitHub Actions and GitLab examples in `verification.md` were run as shell under `bash -e`, not on real runners.
+- Schemas exist for `diagnose`, `timeline` and `verify` only. They allow extra properties on purpose.
+- Weak incidents are bounded to one window, so a slow cascade of unrelated-looking failures is several incidents.
+- The "last output" quoted for a crashed process is a heuristic (the first error-like line of the last six) and is
+  marked unrecognized.
+- `search_events` is an unindexed substring scan (ASCII case-insensitive).
+- Text stored before the redaction fixes keeps what the older rules left; it is hidden on output, not rewritten.
+- The GitHub composite Action is deliberately not part of v1.1.0.

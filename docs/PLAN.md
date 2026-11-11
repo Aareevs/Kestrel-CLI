@@ -146,3 +146,44 @@ we are executing it, the decisions made along the way, and the risks we are watc
   exercised and validated in CI on native `windows-latest` runners.
 - Timing-sensitive integration tests. Mitigated by waiting on events and on stored state rather than sleeping, by
   ordering scenarios causally, and by repeated runs under CPU load at every phase gate.
+
+---
+
+## v1.1.0 (2026-11)
+
+Status: **prepared, not tagged.** Twenty-one pull requests (#11-#31), each on its own branch, labeled
+`release: v1.1.0`, merged with `[skip ci]` because CI was kept off to save credits. See
+[PROGRESS.md](PROGRESS.md#v110-prepared-2026-11-12-not-tagged) for what was built, the evidence, and the limits.
+
+| # | PR | Status |
+|---|---|---|
+| 1 | Extension registries (#11) | done |
+| 2 | Custom patterns in `kestrel.yaml` (#12) | done |
+| 3-5 | Java/Kotlin; Rust, .NET, Ruby, PHP; Docker patterns (#13-#15) | done |
+| 6-7 | `inspect` for Elixir, .NET, Deno, Bun; monorepos (#16, #17) | done |
+| 8-10 | Cleaner output; shortcuts; interactive picker (#18-#20) | done |
+| 11-12 | Welcome screen; live status view for `watch` (#21, #22) | done |
+| 13-14 | `mcp init`/`config`; new MCP tools (#23, #24) | done |
+| 15-17 | Two dogfooding rounds; known gaps (#25-#27) | done |
+| 18-19 | JSON Schemas; CI `verify` reports (#28, #29) | done |
+| 20 | Docs: extension guide, ecosystem matrix (#30) | done |
+| 21 | Release prep: CHANGELOG, notes, PROGRESS, PLAN (#31) | done (this PR) |
+
+Decisions:
+
+- **No tag, no release, no tap push.** Publishing stays the owner's call. The release notes are written as
+  "prepared, not released".
+- **CI off.** Every commit and merge subject carries `[skip ci]`; the cost is that Windows was never run. One CI run
+  is recommended before tagging.
+- **Specific over generic.** The catch-all `K004` yields to a rule that names the cause; a time-only incident link may
+  not stretch an incident; process output is data in every renderer (Markdown, XML, terminal).
+- **A configured check that did not run blocks `resolved`.** A behavior change for scripts (exit 3), documented.
+- **Schemas are generated from the Go types** and validated against real output; they allow extra properties so a
+  minor release can add fields.
+- **No GitHub composite Action** in this release; `verify`'s CI reports and plain-shell examples come first.
+- **Dogfooding over reading code.** Two rounds on real projects and real tools failing found more real bugs than any
+  review; keep doing it before each release.
+
+Not in v1.1.0 (candidates for later): the composite GitHub Action; schemas for `inspect`, `sessions`, `status`; a
+Windows-enabled pinned status table; an indexed event search.
+

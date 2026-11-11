@@ -60,6 +60,16 @@ KESTREL_VERSION=<snapshot version from dist/> KESTREL_DOWNLOAD_BASE=file:///tmp/
 
 Nothing happens unless a `v*` tag is pushed. Pushing a tag only produces a draft.
 
+## Preparing a minor release (what v1.1.0 did)
+
+1. Keep a [`CHANGELOG.md`](../CHANGELOG.md) entry and a hand-written note in [`docs/releases/`](releases) (the
+   GoReleaser changelog is only commit subjects, with docs, test and merge commits left out).
+2. Run the gate, then `make release-check` and `make release-snapshot` (both publish nothing), and run the snapshot
+   binary. Record the real results in `docs/PROGRESS.md`.
+3. If CI was kept off during development, run it once on `main` first. Windows is only exercised there.
+4. Tagging is the owner's call. When the draft release is created, paste `docs/releases/vX.Y.Z.md` over its
+   changelog, and mark the CHANGELOG entry with the date.
+
 ## The install script
 
 [`scripts/install.sh`](../scripts/install.sh) (POSIX `sh`):
