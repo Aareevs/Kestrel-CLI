@@ -3,6 +3,7 @@
 package privacy
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -23,7 +24,8 @@ func placeholder(kind string) string { return "[REDACTED:" + kind + "]" }
 var builtin = []rule{
 	{"private-key", regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)`), 0},
 	{"jwt", regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{4,}\.eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}`), 0},
-	{"url-credentials", regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s:/@]+:)[^\s@/]+(@)`), 0},
+	// scheme://user:password@host. The user may be empty: redis://:password@host.
+	{"url-credentials", regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s:/@]*:)[^\s@/]+(@)`), 0},
 	{"anthropic-key", regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{20,}`), 0},
 	{"openai-key", regexp.MustCompile(`\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}`), 0},
 	{"stripe-key", regexp.MustCompile(`\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}`), 0},
@@ -35,6 +37,10 @@ var builtin = []rule{
 	{"basic-auth", regexp.MustCompile(`(?i)\b(basic\s+)[A-Za-z0-9+/]{8,}={0,2}`), 1},
 	// Header lines: "Authorization: …", "Cookie: …", "Set-Cookie: …", "X-Api-Key: …".
 	{"header", regexp.MustCompile(`(?i)\b((?:authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-auth-token)\s*[:=]\s*)[^\r\n]+`), 1},
+	// An AWS secret access key (40 characters of base64) written after the word
+	// "secret" with no "=" or ":" ("AWS key AKIA… and secret wJal…"), which the
+	// key=value rule below doesn't see.
+	{"aws-secret-key", regexp.MustCompile(`(?i)(\bsecret\b[ \t:='"]+)[A-Za-z0-9/+]{40,}`), 1},
 	// key=value / key: value / "key": "value" pairs with secret-sounding keys.
 	{"secret", regexp.MustCompile(`(?i)((?:^|[^A-Za-z0-9])["']?[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret[_-]?key|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|client[_-]?secret|credentials?)["']?\s*[:=]\s*["']?)([^\s"',;&}]+)`), 1},
 }
@@ -123,4 +129,43 @@ func (s *Stream) Line(line string) string {
 		return s.r.Redact(line[:loc[0]]) + placeholder("private-key")
 	}
 	return s.r.Redact(line)
+}
+
+// RedactValue redacts every string inside v (a report to print or serve). It works on the decoded JSON
+// tree, so a replacement can never break the JSON itself.
+func RedactValue[T any](r *Redactor, v T) (T, error) {
+	var zero T
+	b, err := json.Marshal(v)
+	if err != nil {
+		return zero, err
+	}
+	var tree any
+	if err := json.Unmarshal(b, &tree); err != nil {
+		return zero, err
+	}
+	b, err = json.Marshal(redactTree(r, tree))
+	if err != nil {
+		return zero, err
+	}
+	var out T
+	if err := json.Unmarshal(b, &out); err != nil {
+		return zero, err
+	}
+	return out, nil
+}
+
+func redactTree(r *Redactor, v any) any {
+	switch t := v.(type) {
+	case string:
+		return r.Redact(t)
+	case []any:
+		for i := range t {
+			t[i] = redactTree(r, t[i])
+		}
+	case map[string]any:
+		for k, x := range t {
+			t[k] = redactTree(r, x)
+		}
+	}
+	return v
 }
