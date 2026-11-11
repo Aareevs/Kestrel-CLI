@@ -461,9 +461,24 @@ func (r DependencyNotRunning) Evaluate(c *Context) []api.Hypothesis {
 // missingModuleStep suggests how to get the missing code, by what kind of
 // runtime reported it.
 func missingModuleStep(svc, msg string) string {
-	for _, jvm := range []string{"ClassNotFoundException", "NoClassDefFoundError", "main class", "jarfile"} {
-		if strings.Contains(msg, jvm) {
-			return fmt.Sprintf("Build %s so its classes and dependencies exist (e.g. ./mvnw package or ./gradlew build) and check its classpath and main class.", svc)
+	steps := []struct {
+		markers []string
+		advice  string
+	}{
+		{[]string{"ClassNotFoundException", "NoClassDefFoundError", "main class", "jarfile"},
+			"Build %s so its classes and dependencies exist (e.g. ./mvnw package or ./gradlew build) and check its classpath and main class."},
+		{[]string{"Could not load file or assembly", ".NET", "compatible framework"},
+			"Run dotnet restore and dotnet build for %s, and check that the .NET runtime it targets is installed (dotnet --list-runtimes)."},
+		{[]string{"Could not find gem", "GemNotFound", "cannot load such file"},
+			"Run bundle install for %s and check the require path."},
+		{[]string{"Failed opening required", "autoload.php", "\" not found"},
+			"Run composer install (and composer dump-autoload) for %s and check the class name and namespace."},
+	}
+	for _, s := range steps {
+		for _, m := range s.markers {
+			if strings.Contains(msg, m) {
+				return fmt.Sprintf(s.advice, svc)
+			}
 		}
 	}
 	return fmt.Sprintf("Install %s's dependencies (e.g. npm install, pip install -r requirements.txt, go mod download) and check the import path.", svc)

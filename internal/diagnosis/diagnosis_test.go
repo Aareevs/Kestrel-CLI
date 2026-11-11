@@ -379,6 +379,89 @@ func TestJdbcRefusalLinksServiceToDatabase(t *testing.T) {
 	}
 }
 
+// Kestrel's wording for a taken port carries the port (the generic address-in-use
+// shape would not), so the port-conflict diagnosis names it.
+func TestDotnetPortConflictNamesThePort(t *testing.T) {
+	s := newStream()
+	s.started(0, "web")
+	s.line(100, "web", "Unable to start Kestrel. System.IO.IOException: Failed to bind to address http://127.0.0.1:5000: address already in use.")
+	s.crash(130, "web", 134)
+	d := diagnose(t, api.Topology{Services: []api.ServiceTopology{{Name: "web"}}}, s)[0]
+	top := d.Hypotheses[0]
+	if top.RuleID != "K001-port-conflict" || !strings.Contains(top.Title, "port 5000 is already in use") || top.NextStep.Command != "lsof -nP -iTCP:5000 -sTCP:LISTEN" {
+		t.Fatalf("top: %+v\nall: %s", top, ruleIDs(d))
+	}
+}
+
+// A panic in a service that was healthy is a crash after a healthy start with a
+// fatal cause, whatever the language prints.
+func TestPanicsAfterAHealthyStartAreHighConfidence(t *testing.T) {
+	for name, line := range map[string]string{
+		"rust":   "thread 'main' panicked at src/main.rs:12:5:",
+		"dotnet": "Unhandled exception. System.InvalidOperationException: Sequence contains no elements",
+		"ruby":   "app.rb:3:in `<main>': undefined method `foo' for nil (NoMethodError)",
+		"php":    "PHP Fatal error:  Uncaught Error: Call to undefined function foo() in /app/index.php:3",
+		"jvm":    `Exception in thread "main" java.lang.IllegalStateException: boom`,
+	} {
+		s := newStream()
+		s.started(0, "svc")
+		s.ready(100, "svc")
+		s.line(900, "svc", line)
+		s.crash(920, "svc", 1)
+		d := diagnose(t, api.Topology{}, s)[0]
+		top := d.Hypotheses[0]
+		if top.RuleID != "K003-crash-after-start" || top.Confidence.Level != api.ConfidenceHigh {
+			t.Errorf("%s: %s", name, ruleIDs(d))
+		}
+	}
+}
+
+// The Rails PG gem words a refused connection without the psql parentheses; the
+// port is still captured, so the service is linked to the database by port.
+func TestRailsPostgresRefusalLinksByPort(t *testing.T) {
+	s := newStream()
+	s.started(0, "db")
+	s.line(100, "db", "FATAL:  database files are incompatible with server")
+	s.crash(110, "db", 1)
+	s.started(200, "web")
+	for i := 0; i < 5; i++ {
+		s.line(300+i*100, "web", `PG::ConnectionBad: connection to server at "127.0.0.1", port 5432 failed: Connection refused`)
+	}
+	s.crash(900, "web", 1)
+	topo := api.Topology{Services: []api.ServiceTopology{{Name: "db", Ports: []int{5432}}, {Name: "web"}}}
+	d := diagnose(t, topo, s)[0]
+	top := d.Hypotheses[0]
+	if !d.Incident.InitiatingKnown || d.Incident.InitiatingService != "db" || top.RuleID != "K002-dependency-down" ||
+		!strings.Contains(strings.Join(top.Confidence.Factors, " "), "web's connection errors target port 5432, which db owns") {
+		t.Fatalf("initiating %q\n%s\nfactors: %v", d.Incident.InitiatingService, ruleIDs(d), top.Confidence.Factors)
+	}
+}
+
+func TestMissingCodeAdviceMatchesTheRuntime(t *testing.T) {
+	for line, want := range map[string]string{
+		"Unhandled exception. System.IO.FileNotFoundException: Could not load file or assembly 'Dapper'": "dotnet restore",
+		"You must install or update .NET to run this application.":                                       "dotnet --list-runtimes",
+		"Could not find gem 'rails (~> 7.0)' in locally installed gems.":                                 "bundle install",
+		"/app/app.rb:1:in `require': cannot load such file -- sinatra (LoadError)":                       "bundle install",
+		"PHP Fatal error:  Uncaught Error: Failed opening required 'vendor/autoload.php'":                "composer install",
+		"Error: Cannot find module 'express'":                                                            "npm install",
+	} {
+		s := newStream()
+		s.started(0, "svc")
+		s.line(100, "svc", line)
+		s.crash(120, "svc", 1)
+		var step string
+		for _, h := range diagnose(t, api.Topology{}, s)[0].Hypotheses {
+			if h.RuleID == "K006-missing-module" {
+				step = h.NextStep.Description
+			}
+		}
+		if !strings.Contains(step, want) {
+			t.Errorf("%q: advice %q, want it to mention %q", line, step, want)
+		}
+	}
+}
+
 func TestDependentAlreadyFailingIsContradiction(t *testing.T) {
 	s := newStream()
 	s.line(0, "api", "dial tcp 127.0.0.1:5432: connect: connection refused") // before the db failed
