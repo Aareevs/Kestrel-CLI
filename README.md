@@ -108,6 +108,7 @@ kestrel verify    # or: kestrel v
 - `-j` / `--json`: Universal shorthand for JSON output across all commands (`kestrel diag -j`, `kestrel ins -j`, `kestrel s -j`, `kestrel tl -j`).
 - `-a` / `--all`: Search every project's sessions (`diagnose`, `timeline`, `verify`, `sessions`).
 - `-I` / `--incident N`: Just one incident of a session (`diagnose`, `timeline`, `verify`), numbered as in the report.
+- `-i` / `--interactive`: Pick the session (and incident) with the arrow keys (`diagnose`, `timeline`, `verify`, `sessions show`). Terminal only: with piped input or output it says so and uses the latest session. `q`/Esc cancels (exit 130); `1`-`9` jumps to a row.
 - `-s` / `--service`: A service's own recorded output (`timeline`). `-w` / `--window`: the stability window (`verify`).
 - `-n` / `--name` and `-s` / `--svc`: Name the command, or add another service (`run`).
 - `-v` / `--verbose`: Diagnostic logging to stderr.

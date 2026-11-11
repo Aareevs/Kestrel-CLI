@@ -16,9 +16,10 @@ import (
 
 func newVerifyCmd(g *globals) *cobra.Command {
 	var (
-		all       bool
-		allowExec bool
-		o         app.VerifyOptions
+		all         bool
+		allowExec   bool
+		interactive bool
+		o           app.VerifyOptions
 	)
 	cmd := &cobra.Command{
 		Use:     "verify [id|last]",
@@ -47,7 +48,12 @@ func newVerifyCmd(g *globals) *cobra.Command {
 					fmt.Fprintf(g.streams.Err, "%s %s %s\n", g.style.Dim("running"), g.style.Cyan(c.Display), g.style.Dim("in "+c.DisplayDir+" (timeout "+c.Timeout.String()+")"))
 				}
 			}
-			rep, err := a.Verify(cmd.Context(), g.sessionRef(args), all, o)
+			ref, inc, err := g.choose(cmd.Context(), a, args, all, interactive, o.Incident, true)
+			if err != nil {
+				return err
+			}
+			o.Incident = inc
+			rep, err := a.Verify(cmd.Context(), ref, all, o)
 			if err != nil {
 				return appErr(err)
 			}
@@ -65,6 +71,7 @@ func newVerifyCmd(g *globals) *cobra.Command {
 	f.BoolVarP(&all, "all", "a", false, "resolve the session among every project's sessions")
 	f.BoolVar(&allowExec, "allow-exec", false, "run the command checks in verify.checks without asking")
 	f.IntVarP(&o.Incident, "incident", "I", 0, "incident number to verify (default: the latest)")
+	f.BoolVarP(&interactive, "interactive", "i", false, "pick the session and incident from a list (in a terminal)")
 	f.DurationVarP(&o.Window, "window", "w", app.DefaultVerifyWindow, "stability window: how long every check must keep passing")
 	f.DurationVar(&o.Interval, "interval", app.DefaultVerifyInterval, "time between samples within the window")
 	return cmd

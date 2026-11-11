@@ -12,8 +12,9 @@ import (
 
 func newDiagnoseCmd(g *globals) *cobra.Command {
 	var (
-		all      bool
-		incident int
+		all         bool
+		incident    int
+		interactive bool
 	)
 	cmd := &cobra.Command{
 		Use:     "diagnose [id|last]",
@@ -29,7 +30,11 @@ func newDiagnoseCmd(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rep, err := a.DiagnoseIncident(cmd.Context(), g.sessionRef(args), all, incident)
+			ref, inc, err := g.choose(cmd.Context(), a, args, all, interactive, incident, true)
+			if err != nil {
+				return err
+			}
+			rep, err := a.DiagnoseIncident(cmd.Context(), ref, all, inc)
 			if err != nil {
 				return appErr(err)
 			}
@@ -45,6 +50,7 @@ func newDiagnoseCmd(g *globals) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&all, "all", "a", false, "resolve the session among every project's sessions")
 	cmd.Flags().IntVarP(&incident, "incident", "I", 0, "only this incident (numbered as in the report); default: all")
+	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "pick the session and incident from a list (in a terminal)")
 	return cmd
 }
 
@@ -67,11 +73,12 @@ func diagnoseExit(rep *api.DiagnosisReport) error {
 
 func newTimelineCmd(g *globals) *cobra.Command {
 	var (
-		all      bool
-		service  string
-		since    time.Duration
-		limit    int
-		incident int
+		all         bool
+		service     string
+		since       time.Duration
+		limit       int
+		incident    int
+		interactive bool
 	)
 	cmd := &cobra.Command{
 		Use:     "timeline [id|last]",
@@ -86,7 +93,11 @@ func newTimelineCmd(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rep, err := a.Timeline(cmd.Context(), g.sessionRef(args), all, app.TimelineOptions{Service: service, Since: since, Limit: limit, Incident: incident})
+			ref, inc, err := g.choose(cmd.Context(), a, args, all, interactive, incident, true)
+			if err != nil {
+				return err
+			}
+			rep, err := a.Timeline(cmd.Context(), ref, all, app.TimelineOptions{Service: service, Since: since, Limit: limit, Incident: inc})
 			if err != nil {
 				return appErr(err)
 			}
@@ -99,6 +110,7 @@ func newTimelineCmd(g *globals) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&all, "all", "a", false, "resolve the session among every project's sessions")
 	cmd.Flags().IntVarP(&incident, "incident", "I", 0, "only this incident (numbered as in the report); default: all")
+	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "pick the session and incident from a list (in a terminal)")
 	cmd.Flags().StringVarP(&service, "service", "s", "", "show this service's recorded output and its incidents")
 	cmd.Flags().DurationVar(&since, "since", 0, "only the last part of the session, e.g. 5m (relative to its end)")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 200, "with --service: at most this many recent events")

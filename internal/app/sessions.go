@@ -117,6 +117,24 @@ func (a *App) SessionsList(ctx context.Context, all bool, limit int) (*api.Sessi
 	return &api.SessionList{SchemaVersion: api.SchemaVersion, Sessions: list, AllProjects: all}, nil
 }
 
+// PickableSessions lists recorded sessions, newest first, for a picker. When
+// there are none it is the same actionable usage error as an unknown reference.
+func (a *App) PickableSessions(ctx context.Context, all bool, limit int) ([]api.SessionSummary, error) {
+	list, err := a.SessionsList(ctx, all, limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(list.Sessions) == 0 {
+		hint := ""
+		if !all {
+			hint = " (searching this project's sessions; pass --all to search every project)"
+		}
+		return nil, &UsageError{Err: fmt.Errorf("no such session: none recorded yet%s", hint),
+			Next: "kestrel run -- <command>    or: kestrel watch    records a session to look at"}
+	}
+	return list.Sessions, nil
+}
+
 // resolve finds a session by reference, mapping lookup problems to usage errors.
 func (a *App) resolve(ctx context.Context, st *storage.Store, ref string, all bool) (string, error) {
 	root := a.ProjectRoot
