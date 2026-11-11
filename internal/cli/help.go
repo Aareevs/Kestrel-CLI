@@ -26,7 +26,7 @@ var commandOrder = []string{
 	"inspect", "init", "doctor",
 	"run", "watch", "status",
 	"diagnose", "timeline", "verify", "sessions",
-	"config", "cleanup", "mcp", "version", "completion", "help",
+	"config", "schema", "cleanup", "mcp", "version", "completion", "help",
 }
 
 // groupOf says which group each top-level command belongs to.
@@ -34,7 +34,7 @@ var groupOf = map[string]string{
 	"inspect": "start", "init": "start", "doctor": "start",
 	"run": "run", "watch": "run", "status": "run",
 	"diagnose": "investigate", "timeline": "investigate", "verify": "investigate", "sessions": "investigate",
-	"config": "manage", "cleanup": "manage", "mcp": "manage", "version": "manage",
+	"config": "manage", "schema": "manage", "cleanup": "manage", "mcp": "manage", "version": "manage",
 }
 
 func assignGroups(root *cobra.Command) {
