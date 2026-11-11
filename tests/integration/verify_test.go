@@ -279,8 +279,12 @@ func TestVerifyRefusesExecWithoutAuthorization(t *testing.T) {
 	if c == nil || c.Status != api.CheckSkipped || !strings.Contains(c.SkipReason, "--allow-exec") || c.Target != touchCmd {
 		t.Fatalf("command check: %+v", c)
 	}
-	if code != 0 || rep.Verdict != api.VerdictResolved || rep.Session != nil || rep.Saved {
-		t.Fatalf("health-only verify: exit %d verdict %s session %v saved %v", code, rep.Verdict, rep.Session, rep.Saved)
+	// Everything that ran passed, but the command did not run: not "verified".
+	if code != 3 || rep.Verdict != api.VerdictInconclusive || rep.Claim != api.ClaimUnresolved || rep.Session != nil || rep.Saved {
+		t.Fatalf("health-only verify: exit %d verdict %s claim %s session %v saved %v", code, rep.Verdict, rep.Claim, rep.Session, rep.Saved)
+	}
+	if !strings.Contains(strings.Join(rep.Reasons, " "), "pass --allow-exec") {
+		t.Fatalf("the reason should say how to run the command: %v", rep.Reasons)
 	}
 	if !strings.Contains(strings.Join(rep.Reasons, " "), "not run: command `"+touchCmd+"`") {
 		t.Fatalf("the skipped command should be listed among the reasons: %v", rep.Reasons)
@@ -304,7 +308,7 @@ func TestVerifyCommandFailureTimeoutAndRedaction(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		failCmd = "echo FAIL: login with token=sup3rs3cret & exit 3"
 	}
-	project := execProject(t, fmt.Sprintf("    - { type: command, run: %q, timeout: 5s }\n    - { type: command, run: %q, timeout: 300ms }\n",
+	project := execProject(t, fmt.Sprintf("    - { type: command, run: %q, timeout: 5s }\n    - { type: command, run: %q, timeout: 2s }\n",
 		failCmd, fmt.Sprintf("%s --sleep --pidfile %s", fake, pidfile)))
 
 	code, rep, _ := verifyJSON(t, home, project, "--window", "500ms", "--interval", "250ms", "--allow-exec")
@@ -359,7 +363,8 @@ func TestVerifyPromptInProcess(t *testing.T) {
 		if !strings.Contains(errs, touchCmd) || !strings.Contains(errs, project) || !strings.Contains(errs, "7s") {
 			t.Fatalf("the prompt must show the command, directory and timeout:\n%s", errs)
 		}
-		if code != 0 || !strings.Contains(out, "declined at the prompt") {
+		// Declined means the configured check did not run: not "verified" (exit 3).
+		if code != 3 || !strings.Contains(out, "declined at the prompt") || !strings.Contains(out, "Verdict: inconclusive") {
 			t.Fatalf("answer %q: exit %d\n%s", answer, code, out)
 		}
 	}
@@ -439,12 +444,12 @@ services:
 	r := run(t, dir, nil, "verify", "--format", "json", "--window", "600ms", "--interval", "200ms")
 	rep := decode[api.VerificationReport](t, r.stdout)
 	// client's refusals repeat unchanged, so they are folded into summaries
-	// (every 10s) and this short window can't see them recur: it says so.
+	// (every 2s) and this very short window can't see them recur: it says so.
 	// Both start at once and fail together: one incident with both members.
 	if rep.Incident == nil || len(rep.Incident.Services) != 2 {
 		t.Fatalf("expected one incident with api and client: %+v", rep.Incident)
 	}
-	if r.code != 1 || !rep.Live || rep.Verdict == api.VerdictResolved || !strings.Contains(strings.Join(rep.Notes, " "), "one summary every 10s") {
+	if r.code != 1 || !rep.Live || rep.Verdict == api.VerdictResolved || !strings.Contains(strings.Join(rep.Notes, " "), "a summary every 2s") {
 		t.Fatalf("live verify: exit %d %+v", r.code, rep)
 	}
 	if c := checkOf(rep, api.CheckKindLiveness, "api"); c == nil || c.Status != api.CheckPassed {
@@ -458,6 +463,13 @@ services:
 	}
 	if target == nil || target.Status != api.CheckFailed || !strings.Contains(target.Origin, "client failed to make") {
 		t.Fatalf("the address client failed to reach should be re-checked: %+v", rep.Checks)
+	}
+
+	// A window longer than the summary interval does see them recur, and says so.
+	r = run(t, dir, nil, "verify", "--format", "json", "--window", "3s", "--interval", "500ms")
+	long := decode[api.VerificationReport](t, r.stdout)
+	if len(long.After) == 0 || long.Verdict == api.VerdictResolved || strings.Contains(strings.Join(long.Notes, " "), "may not see it recur") {
+		t.Fatalf("a 3s window should see client's refusals recur: exit %d after=%d verdict=%s notes=%v", r.code, len(long.After), long.Verdict, long.Notes)
 	}
 
 	r = run(t, dir, nil, "verify", "--no-color", "--window", "400ms", "--interval", "200ms")

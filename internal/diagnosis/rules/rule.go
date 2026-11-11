@@ -6,6 +6,7 @@ package rules
 
 import (
 	"fmt"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -107,6 +108,52 @@ func cause(lines []api.Event) (api.Event, bool) {
 		}
 	}
 	return best, found
+}
+
+// tellingWords are what an error message usually says, for choosing the most
+// useful of a process's last unclassified lines.
+var tellingWords = regexp.MustCompile(`(?i)\b(error|errors|fail|failed|failure|cannot|can't|couldn't|unable|not found|denied|refused|missing|invalid|unexpected|undefined|declared|no such|fatal|panic|exception|unknown)\b`)
+
+// lastOutput looks at the last few non-empty output lines before a service's
+// failure, for when no known pattern matched any of its output: the stderr
+// lines if there are any, else stdout. best is the first of them that reads like
+// an error (the headline: tools print the reason first and advice after it, as
+// npm does), else the last line. cited is what to show as evidence: best and the
+// last two lines, in order. Lines are data, quoted for a person to read; nothing
+// here acts on them.
+func lastOutput(tail []api.Event) (cited []api.Event, best api.Event) {
+	const look = 6
+	var lines []api.Event
+	for _, source := range []api.EventSource{api.SourceStderr, api.SourceStdout} {
+		lines = lines[:0]
+		for _, e := range tail {
+			if e.Type == api.EventLogLine && e.Source == source && strings.TrimSpace(e.Message) != "" {
+				lines = append(lines, e)
+			}
+		}
+		if len(lines) > 0 {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return nil, api.Event{}
+	}
+	if len(lines) > look {
+		lines = lines[len(lines)-look:]
+	}
+	bestAt := len(lines) - 1
+	for i, l := range lines {
+		if tellingWords.MatchString(l.Message) {
+			bestAt = i
+			break
+		}
+	}
+	for i, l := range lines {
+		if i == bestAt || i >= len(lines)-2 {
+			cited = append(cited, l)
+		}
+	}
+	return cited, lines[bestAt]
 }
 
 func shorten(s string, n int) string {

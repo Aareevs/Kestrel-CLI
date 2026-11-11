@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -393,5 +394,45 @@ func TestCollectorUsesTheProjectsPatternLibrary(t *testing.T) {
 	}
 	if got[1].Attrs.PatternID != "P009-go-panic" || got[2].Attrs.PatternID != "" {
 		t.Fatalf("built-ins: %+v %+v", got[1], got[2])
+	}
+}
+
+// A steadily repeating error reports in as it goes (every RepeatFlush), instead
+// of staying silent until the run ends: a short verification window must be
+// able to see that it is still happening.
+func TestCollectorSummarizesLongRepeatsPeriodically(t *testing.T) {
+	t0 := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
+	var tick int64
+	clock := func() time.Time { return t0.Add(time.Duration(atomic.AddInt64(&tick, 1)-1) * 500 * time.Millisecond) }
+	rec := &recorder{}
+	c := New(events.NewStamper(clock), rec, Options{RepeatWindow: time.Minute, RepeatIdle: time.Hour, RepeatFlush: 2 * time.Second})
+	go c.Run()
+	var b strings.Builder
+	for i := 0; i < 13; i++ { // one line every 500ms for 6s
+		b.WriteString("upstream error: connect ECONNREFUSED 127.0.0.1:5432\n")
+	}
+	c.ReadStream("api", 1, api.SourceStderr, strings.NewReader(b.String()))
+	c.Close()
+	c.Wait()
+
+	var got []string
+	total := 0
+	for _, e := range rec.evs {
+		got = append(got, fmt.Sprintf("+%s ×%d over %dms", e.Time.Sub(t0), e.Attrs.Repeats, e.Attrs.DurationMS))
+		total += e.Lines()
+	}
+	// (the stamper reads the clock once for the session ID, so the first line is at +500ms)
+	want := []string{"+500ms ×0 over 0ms", "+2.5s ×4 over 2000ms", "+4.5s ×4 over 2000ms", "+6.5s ×4 over 2000ms"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if total != 13 {
+		t.Fatalf("events account for %d lines, want 13", total)
+	}
+	// The summaries keep the type and severity, so they count as anomalies.
+	for _, e := range rec.evs {
+		if e.Type != api.EventDependencyConnFailed || e.Severity != api.SeverityError {
+			t.Fatalf("type/severity lost: %+v", e)
+		}
 	}
 }

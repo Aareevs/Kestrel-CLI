@@ -218,3 +218,68 @@ func TestRecoveryAndRepeatSummaries(t *testing.T) {
 		t.Fatalf("timeline:\n got  %s\n want %s", got, want)
 	}
 }
+
+// Found by running a real two-service session with a short window: a dependent's
+// refusals kept coming after its dependency died, and the repeat summary written
+// a couple of seconds later started a second, "unresolved" incident. A summary
+// covers a span, so it continues what came before the span.
+func TestRepeatSummaryContinuesTheIncidentItRepeats(t *testing.T) {
+	s := newStream()
+	s.started(0, "api")
+	s.ready(100, "api")
+	s.refused(1000, "api", 5432)
+	// 3s of the same refusal, summarized at 4s (written well past a 1s window).
+	s.at(4000, "api", api.EventDependencyConnFailed, api.SeverityError, "dial tcp 127.0.0.1:5432: connect: connection refused",
+		api.Attrs{Port: 5432, PatternID: "P006-connection-refused", Repeats: 6, DurationMS: 3000})
+	got := Correlate(s.evs, graph.Build(topo3, s.evs), time.Second)
+	if len(got) != 1 {
+		t.Fatalf("a repeat summary that continues the run must stay in its incident, got %d incidents", len(got))
+	}
+	// But a repeat that does not reach back to the incident starts a new one.
+	s2 := newStream()
+	s2.refused(1000, "api", 5432)
+	s2.at(9000, "api", api.EventDependencyConnFailed, api.SeverityError, "dial tcp 127.0.0.1:5432: connect: connection refused",
+		api.Attrs{Port: 5432, PatternID: "P006-connection-refused", Repeats: 2, DurationMS: 1000})
+	if got := Correlate(s2.evs, graph.Build(topo3, s2.evs), time.Second); len(got) != 2 {
+		t.Fatalf("a quiet gap before the span still splits incidents, got %d", len(got))
+	}
+}
+
+// Unrelated errors in a long session used to chain, each within a window of the
+// last, into one ever-growing weak incident. A time-only link must fall within a
+// window of where the incident started.
+func TestWeakLinksDoNotChainIntoOneHugeIncident(t *testing.T) {
+	loose := api.Topology{Services: []api.ServiceTopology{{Name: "a"}, {Name: "b"}, {Name: "c"}, {Name: "d"}, {Name: "e"}}}
+	s := newStream()
+	for i, svc := range []string{"a", "b", "c", "d", "e"} {
+		s.crash(i*8000, svc, 1) // 8s apart, window 10s: each is within a window of the last
+	}
+	got := Correlate(s.evs, graph.Build(loose, s.evs), 10*time.Second)
+	if len(got) < 3 {
+		var sizes []int
+		for _, in := range got {
+			sizes = append(sizes, len(in.Anomalies))
+		}
+		t.Fatalf("unrelated failures 8s apart should not chain into one incident, got %d incidents %v", len(got), sizes)
+	}
+	for _, in := range got {
+		if in.End.Sub(in.Start) > 10*time.Second {
+			t.Errorf("incident %d spans %s: a weak incident is at most one window long", in.Number, in.End.Sub(in.Start))
+		}
+	}
+	// Simultaneous failures within the window still group, weakly, as before.
+	s2 := newStream()
+	s2.crash(0, "a", 1)
+	s2.crash(6000, "b", 1)
+	if got := Correlate(s2.evs, graph.Build(loose, s2.evs), 10*time.Second); len(got) != 1 || !got[0].Weak {
+		t.Fatalf("two failures within the window are one weak incident: %d", len(got))
+	}
+	// A dependency chain is strong and may run on past the window.
+	s3 := newStream()
+	s3.crash(0, "db", 1)
+	s3.refused(8000, "api", 5432)
+	s3.at(16000, "web", api.EventProbeFailed, api.SeverityError, "api is down", api.Attrs{})
+	if got := Correlate(s3.evs, graph.Build(topo3, s3.evs), 10*time.Second); len(got) != 1 || got[0].Weak {
+		t.Fatalf("a strong chain stays together: %d incidents", len(got))
+	}
+}

@@ -346,6 +346,18 @@ func (r StartupFailure) Evaluate(c *Context) []api.Hypothesis {
 		if found {
 			h.Supporting = append(h.Supporting, evidence(line, describe(line)))
 		}
+		// The process died and no pattern matched its output? Its last lines are
+		// still the best lead. (Not for a startup timeout: a process that is
+		// still running has said nothing about why it isn't ready.)
+		var tailLines []api.Event
+		var best api.Event
+		if !found && fail.Type == api.EventProcessCrashed {
+			if tailLines, best = lastOutput(c.Tail[svc]); len(tailLines) > 0 {
+				for _, l := range tailLines {
+					h.Supporting = append(h.Supporting, evidence(l, describe(l)+" (unrecognized output)"))
+				}
+			}
+		}
 		h.Supporting = append(h.Supporting, evidence(fail, describe(fail)))
 
 		crashed := fail.Type == api.EventProcessCrashed
@@ -355,6 +367,9 @@ func (r StartupFailure) Evaluate(c *Context) []api.Hypothesis {
 		case crashed && found:
 			level = api.ConfidenceHigh
 			factors = append(factors, fmt.Sprintf("%s %s before ever becoming ready", svc, exitDetail(fail)), "it logged an error just before exiting"+patternNote(line))
+		case crashed && len(tailLines) > 0:
+			level = api.ConfidenceMedium
+			factors = append(factors, fmt.Sprintf("%s %s before ever becoming ready", svc, exitDetail(fail)), "its output matched no known error pattern, so its last lines are shown for you to read")
 		case crashed:
 			level = api.ConfidenceMedium
 			factors = append(factors, fmt.Sprintf("%s %s before ever becoming ready", svc, exitDetail(fail)), "its output shows no error before the exit")
@@ -394,6 +409,8 @@ func (r StartupFailure) Evaluate(c *Context) []api.Hypothesis {
 		switch {
 		case found:
 			h.Title = fmt.Sprintf("%s failed during startup: %s", svc, shorten(line.Message, 70))
+		case crashed && len(tailLines) > 0:
+			h.Title = fmt.Sprintf("%s %s during startup; its last output: %s", svc, exitDetail(fail), shorten(best.Message, 70))
 		case crashed:
 			h.Title = fmt.Sprintf("%s %s during startup", svc, exitDetail(fail))
 		default:
@@ -402,6 +419,8 @@ func (r StartupFailure) Evaluate(c *Context) []api.Hypothesis {
 		facts := fmt.Sprintf("Observed: %s %s at %s without ever passing its readiness probe.", svc, failureVerb(fail), clock(fail.Time))
 		if found {
 			h.Explanation = fmt.Sprintf("%s Hypothesis: it failed because of what it logged while starting: %q.", facts, shorten(line.Message, 160))
+		} else if len(tailLines) > 0 {
+			h.Explanation = fmt.Sprintf("%s Its output matched no known error pattern, so Kestrel can't say why; the line that most looks like the reason is %q (see the evidence for its last lines).", facts, shorten(best.Message, 160))
 		} else {
 			h.Explanation = facts + " Its output doesn't say why."
 		}

@@ -52,7 +52,7 @@ level default to `info`, or to the matching pattern's severity.
 
 Consecutive lines on one stream with the same fingerprint are folded. The first line is emitted as is. Later
 copies are counted and reported as one event with `attrs.repeats` and `attrs.duration_ms`. The repeat summary
-is flushed when a different line arrives, when the stream goes quiet for 1s, or after 10s. Text output shows it
+is flushed when a different line arrives, when the stream goes quiet for 1s, and every 2s while the repeats go on (the run keeps folding, so a steady error is a first line plus one summary per 2s, not one event per line), so a verification window of a few seconds still sees it recur. A run is cut after 10s and starts again with a fresh first line. Text output shows it
 as `↻ ×13 more over 1.4s: <the line>`. Each stream folds separately, so the summary names its line.
 
 ## Docker Compose output

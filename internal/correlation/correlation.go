@@ -100,11 +100,27 @@ func (in *Incident) strongLink(e api.Event, g *graph.Graph) bool {
 	return false
 }
 
+// begin is when an anomaly's span starts. A repeat summary stands for lines
+// from over its whole span, so it continues whatever came before it, not only
+// what happened just before it was written.
+func begin(e api.Event) time.Time {
+	if e.Attrs.Repeats > 0 && e.Attrs.DurationMS > 0 {
+		return e.Time.Add(-time.Duration(e.Attrs.DurationMS) * time.Millisecond)
+	}
+	return e.Time
+}
+
 // Correlate groups the anomalies among events (seq order) into incidents.
 // An anomaly joins the current incident if it arrives within the window of
 // the incident's latest anomaly; the link is recorded as strong or weak.
 // After a quiet gap longer than the window, the next anomaly starts a new
 // incident.
+//
+// Strong links can carry an incident on for as long as the failure does (a
+// dependency chain, one service's repeated errors). A weak link is only time,
+// so it may not stretch an incident: it must fall within a window of where the
+// incident started, or unrelated errors in a long session would chain into one
+// ever-growing incident.
 func Correlate(events []api.Event, g *graph.Graph, window time.Duration) []*Incident {
 	if window <= 0 {
 		window = DefaultWindow
@@ -115,12 +131,15 @@ func Correlate(events []api.Event, g *graph.Graph, window time.Duration) []*Inci
 		if !IsAnomaly(e) {
 			continue
 		}
-		if cur != nil && e.Time.Sub(cur.last) <= window {
-			if !cur.strongLink(e, g) {
-				cur.Weak = true // linked only by time
+		if cur != nil && begin(e).Sub(cur.last) <= window {
+			strong := cur.strongLink(e, g)
+			if strong || begin(e).Sub(cur.Anomalies[0].Time) <= window {
+				if !strong {
+					cur.Weak = true // linked only by time
+				}
+				cur.add(e)
+				continue
 			}
-			cur.add(e)
-			continue
 		}
 		cur = &Incident{ByService: map[string][]api.Event{}, First: map[string]api.Event{}}
 		cur.add(e)
