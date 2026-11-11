@@ -38,7 +38,9 @@ be determined, nothing is labeled a downstream symptom, and the diagnosis is `un
 ## Ranking and status
 
 Hypotheses are ranked by confidence. Then a hypothesis about the initiating service ranks higher, then one that
-covers more services, and one with contradicting evidence ranks lower. Ties go to the earlier evidence.
+covers more services, and one with contradicting evidence ranks lower. A catch-all rule (`K004`, which says a service
+failed but not why) is nudged below a rule that names the cause, so with equal confidence "node is missing a
+dependency" is listed before "node failed during startup". Ties go to the earlier evidence.
 
 The incident's status is `hypothesis` when the initiating failure is known and the top hypothesis is at least
 `medium`. Otherwise it is `unresolved`, and the diagnosis leads with the most informative next check.
@@ -62,6 +64,12 @@ contradicting evidence (it did get a port) and lowers the level one step.
 the port. Kestrel never signals that process. For permission failures, use a port above 1024. For Docker's "port is
 already allocated" (pattern `P035`), the holder is often another container, so the step is `docker ps --filter
 "publish=<port>"`; Kestrel never stops containers it didn't start.
+
+When the port is known and another service **of the same session** is known to listen on it (it announced it, or
+`kestrel.yaml` gives it that port), the title says so ("admin could not start: port 3000 is already in use by
+web"), the explanation doesn't claim an unknown process holds it, that service's listening line is cited, and the
+next step is to give one of the two a different port. If the message names no port (Python's `OSError: [Errno 48]`
+doesn't), the holder can't be tied to it and the generic text is used.
 
 ### `K002-dependency-down`
 

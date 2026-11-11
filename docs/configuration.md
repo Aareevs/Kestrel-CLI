@@ -77,7 +77,7 @@ Durations use Go syntax: `500ms`, `2s`, `1m30s`.
 | `name` | string | Required, unique. Letters, digits, `-`, `_`, `.`; up to 63 characters. |
 | `dir` | string | Working directory relative to the project root. Must exist. |
 | `command` | string | What Kestrel runs (only under `run`/`watch`/`verify`, never during `inspect`/`init`/`config`). |
-| `env` | map | Environment for the command. `${VAR}` takes the value from your shell when the command starts. Resolved values are never stored or printed. |
+| `env` | map | Environment for the command. `${VAR}` takes the value from your shell when the command starts. Resolved values are never stored or printed. Kestrel also sets `PYTHONUNBUFFERED=1` for services it starts, because a Python program writing to a pipe otherwise holds its output back and its last lines can be lost when it stops. Set `PYTHONUNBUFFERED` yourself (in `env` or your shell; an empty value turns it off) and yours is used. |
 | `depends_on` | list | Names of other services. Unknown names and cycles are errors. |
 | `health` | object | Readiness probe. See below. |
 
