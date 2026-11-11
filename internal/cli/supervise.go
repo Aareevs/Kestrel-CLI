@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 func appErr(err error) error {
 	var ue *app.UsageError
 	if errors.As(err, &ue) {
-		return usageErr(err)
+		return &ExitError{Code: ExitUsage, Err: err, Next: ue.Next}
 	}
 	return err
 }
@@ -102,9 +103,18 @@ func (g *globals) supervise(ctx context.Context, start func(app.SuperviseOptions
 		},
 		OnSession: func(id string, names []string) {
 			live = output.NewLive(g.streams.Out, g.style, g.quiet, g.json(), names)
+			if cols := output.TerminalWidth(g.streams.Out); cols > 0 && !g.json() {
+				home, _ := os.UserHomeDir()
+				live.Tidy(cols, g.projectRoot(), home)
+			}
 			if !g.json() && !g.quiet {
-				fmt.Fprintf(g.streams.Out, "%s session %s · %s · Ctrl-C to stop\n",
-					g.style.Bold("kestrel"), id, strings.Join(names, ", "))
+				head := fmt.Sprintf("%s session %s · %s · Ctrl-C to stop", g.style.Bold("kestrel"), id, strings.Join(names, ", "))
+				plain := fmt.Sprintf("kestrel session %s · %s · Ctrl-C to stop", id, strings.Join(names, ", "))
+				if cols := output.TerminalWidth(g.streams.Out); cols > 0 && len([]rune(plain)) > cols {
+					// A narrow terminal: services on their own line.
+					head = fmt.Sprintf("%s session %s · Ctrl-C to stop\n  %s", g.style.Bold("kestrel"), id, strings.Join(names, ", "))
+				}
+				fmt.Fprintln(g.streams.Out, head)
 			}
 		},
 	}
@@ -170,7 +180,7 @@ func newStatusCmd(g *globals) *cobra.Command {
 				}
 			} else {
 				if rep.Note != "" {
-					fmt.Fprintln(g.streams.Out, g.style.Dim(rep.Note))
+					output.Paragraph(g.streams.Out, rep.Note, g.text(), g.style.Dim)
 				}
 				if len(rep.Services) > 0 {
 					output.StatusTable(g.streams.Out, rep.Services, g.text())

@@ -68,7 +68,7 @@ func Verification(w io.Writer, r *api.VerificationReport, o TextOptions) {
 	if r.Session != nil {
 		sessionLine(w, *r.Session, o)
 	} else {
-		fmt.Fprintf(w, "%s no recorded session\n", s.Bold("Session"))
+		fmt.Fprintln(w, s.Dim("No recorded session for this project."))
 	}
 	if r.Incident != nil {
 		incidentHeader(w, *r.Incident, o)
@@ -77,9 +77,10 @@ func Verification(w io.Writer, r *api.VerificationReport, o TextOptions) {
 	evidenceBlock(w, "Before: what was failing", r.Before, s.Red("✗"), o)
 	evidenceBlock(w, "Recovery recorded", r.Recovery, s.Green("✓"), o)
 
-	fmt.Fprintf(w, "\n  %s %s\n", s.Bold("Checks"), s.Dim(fmt.Sprintf("(every %s across a %s window)", r.Interval, r.Window)))
 	if len(r.Checks) == 0 {
-		fmt.Fprintln(w, "    (none could be chosen)")
+		fmt.Fprintf(w, "\n  %s %s\n", s.Bold("Checks"), s.Dim("none could be chosen"))
+	} else {
+		fmt.Fprintf(w, "\n  %s %s\n", s.Bold("Checks"), s.Dim(fmt.Sprintf("(every %s across a %s window)", r.Interval, r.Window)))
 	}
 	width := 0
 	for _, c := range r.Checks {
@@ -109,10 +110,10 @@ func Verification(w io.Writer, r *api.VerificationReport, o TextOptions) {
 
 	fmt.Fprintf(w, "\n%s %s  [%s]\n", s.Bold("Verdict:"), o.verdict(r.Verdict), r.Claim)
 	for _, why := range r.Reasons {
-		fmt.Fprintf(w, "  %s %s\n", s.Dim("·"), why)
+		wrapped(w, "  "+s.Dim("·")+" ", "    ", why, o, plain)
 	}
 	for _, n := range r.Notes {
-		fmt.Fprintf(w, "%s %s\n", s.Yellow("!"), n)
+		wrapped(w, s.Yellow("!")+" ", "  ", n, o, plain)
 	}
 	if !o.Quiet && r.Saved {
 		fmt.Fprintf(w, "\n%s\n", s.Dim("Saved as verification "+r.ID+" on session "+r.Session.ID+". Full evidence: --format json"))

@@ -32,6 +32,8 @@ type ExitError struct {
 	Err  error
 	// Hint adds a pointer to --help (for command-line usage mistakes).
 	Hint bool
+	// Next is a concrete next step to try, shown under the error.
+	Next string
 }
 
 func (e *ExitError) Error() string {
@@ -81,7 +83,16 @@ type globals struct {
 func (g *globals) json() bool { return output.Format(g.format) == output.FormatJSON }
 
 func (g *globals) text() output.TextOptions {
-	return output.TextOptions{Style: g.style, Quiet: g.quiet}
+	return output.TextOptions{Style: g.style, Quiet: g.quiet, Width: output.TerminalWidth(g.streams.Out)}
+}
+
+// projectRoot is the resolved project directory, or "" if it can't be resolved.
+func (g *globals) projectRoot() string {
+	a, err := g.app()
+	if err != nil {
+		return ""
+	}
+	return a.ProjectRoot
 }
 
 // app resolves the project and returns the use-case layer.
@@ -100,6 +111,11 @@ func (g *globals) app() (*app.App, error) {
 
 // NewRootCmd builds the command tree.
 func NewRootCmd(s Streams) *cobra.Command {
+	root, _ := newRoot(s)
+	return root
+}
+
+func newRoot(s Streams) (*cobra.Command, *globals) {
 	g := &globals{streams: s}
 	root := &cobra.Command{
 		Use:   "kestrel",
@@ -161,12 +177,14 @@ func NewRootCmd(s Streams) *cobra.Command {
 		newDoctorCmd(g),
 		newVersionCmd(g),
 	)
-	return root
+	assignGroups(root)
+	g.installHelp(root)
+	return root, g
 }
 
 // Execute runs the CLI and returns the process exit code.
 func Execute(ctx context.Context, s Streams, args []string) int {
-	root := NewRootCmd(s)
+	root, g := newRoot(s)
 	root.SetArgs(args)
 	err := root.ExecuteContext(ctx)
 	if err == nil {
@@ -179,9 +197,13 @@ func Execute(ctx context.Context, s Streams, args []string) int {
 		ee = &ExitError{Code: ExitUsage, Err: err, Hint: true}
 	}
 	if ee.Err != nil {
-		fmt.Fprintf(s.Err, "kestrel: %v\n", ee.Err)
+		st := output.NewStyle(output.ColorEnabled(s.Err, g.noColor, s.Getenv))
+		fmt.Fprintf(s.Err, "%s %v\n", st.Red("kestrel:"), ee.Err)
+		if ee.Next != "" {
+			fmt.Fprintf(s.Err, "  %s %s\n", st.Bold("next:"), ee.Next)
+		}
 		if ee.Hint {
-			fmt.Fprintln(s.Err, "Run 'kestrel --help' for usage.")
+			fmt.Fprintln(s.Err, st.Dim("Run 'kestrel --help' for usage."))
 		}
 	}
 	return ee.Code

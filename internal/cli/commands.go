@@ -128,6 +128,7 @@ func newConfigCmd(g *globals) *cobra.Command {
 		Use:   "config",
 		Short: "Show, validate, or locate kestrel.yaml (secrets are always masked)",
 	}
+	groupCommand(cmd)
 
 	show := &cobra.Command{
 		Use:   "show",
