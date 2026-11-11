@@ -65,6 +65,7 @@ func newSessionsCmd(g *globals) *cobra.Command {
 	// `kestrel sessions` on its own is the most common thing to want: the list.
 	cmd.RunE = list.RunE
 
+	var interactive bool
 	show := &cobra.Command{
 		Use:   "show [id|last]",
 		Short: "Show one session: final state, event counts, notable events",
@@ -74,7 +75,11 @@ func newSessionsCmd(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			d, err := a.SessionShow(cmd.Context(), g.sessionRef(args), all)
+			ref, _, err := g.choose(cmd.Context(), a, args, all, interactive, 0, false)
+			if err != nil {
+				return err
+			}
+			d, err := a.SessionShow(cmd.Context(), ref, all)
 			if err != nil {
 				return appErr(err)
 			}
@@ -85,6 +90,8 @@ func newSessionsCmd(g *globals) *cobra.Command {
 			return nil
 		}),
 	}
+
+	show.Flags().BoolVarP(&interactive, "interactive", "i", false, "pick the session from a list (in a terminal)")
 
 	var out string
 	export := &cobra.Command{
