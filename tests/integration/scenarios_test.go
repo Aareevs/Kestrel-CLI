@@ -317,6 +317,14 @@ func TestScenarios(t *testing.T) {
 				t.Fatalf("diagnose exit %d, want %d\n%s\nsession:\n%s\nwatch stderr:\n%s", code, sc.exitCode, errs, show, k.stderr)
 			}
 			rep := decode[api.DiagnosisReport](t, out)
+			// What Kestrel really prints matches the published schemas, for every scenario.
+			validateSchema(t, "diagnose", out)
+			_, tj, _ := kestrelCmd(t, home, project, "timeline", "--format", "json")
+			validateSchema(t, "timeline", tj)
+			if svcs := rep.Session.Services; len(svcs) > 0 {
+				_, tj, _ = kestrelCmd(t, home, project, "timeline", "--format", "json", "--service", svcs[0])
+				validateSchema(t, "timeline", tj)
+			}
 			checkEvidenceExists(t, home, project, rep)
 			sc.check(t, rep)
 
