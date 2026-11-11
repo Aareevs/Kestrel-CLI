@@ -177,6 +177,24 @@ A post-pass then reconciles the results:
 - **Counting.** A repeat summary stands for exactly `attrs.repeats` folded lines (`Event.Lines()`). Timelines
   merge it into the run it continues.
 
+## Terminal output
+
+Output is for people when it goes to a terminal and for tools when it doesn't, and the two never mix:
+
+- **Redirected output is stable.** Off a terminal (a pipe, a file, CI, tests) nothing is colored, shortened, or
+  wrapped, so scripts and golden files see whole lines. `--format json` is never touched.
+- **On a terminal, Kestrel fits its own text to the width** (`output.TerminalWidth`, via `golang.org/x/term`):
+  evidence lines are shortened so their `evt` ID stays beside them, explanations and next steps word-wrap under a
+  hanging indent, incident and session headers pack onto as many lines as they need, and the live view abbreviates
+  the project root as `.` and the home directory as `~`. Kestrel's own lifecycle messages in `watch` (crashes, failed
+  probes, warnings) wrap under their column.
+- **Program output is never rewritten.** What your services print is shown as printed (it may be a table or a stack
+  trace), and the stored event always keeps the full text; only how it is shown changes.
+- **`--help` is grouped** (Get started, Run and watch, Investigate, Manage) and colored; group commands
+  (`sessions`, `config`) report an unknown subcommand with a suggestion instead of silently printing help.
+- **Errors say what to do next.** A usage error can carry a `next:` line (for example, "kestrel run -- <command>"
+  when there are no recorded sessions).
+
 ## Verification
 
 ```text
