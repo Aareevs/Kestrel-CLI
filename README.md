@@ -176,6 +176,10 @@ claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 | **Ruby**: Rails, Sinatra | `Gemfile` | Standard |
 | **PHP**: Laravel | `composer.json`, `artisan` | Standard |
 | **Rust**: axum, actix-web, rocket, warp | `Cargo.toml`, `src/main.rs` | Standard |
+| **.NET**: ASP.NET Core, worker services, console apps | `*.csproj` / `*.fsproj`, `Properties/launchSettings.json`, `appsettings.json` | Standard |
+| **Elixir**: Phoenix, Plug (Bandit, Cowboy) | `mix.exs`, `config/dev.exs`, `config/runtime.exs` | Standard |
+| **Deno**: Fresh, Oak, Hono, `Deno.serve` | `deno.json(c)` tasks, `Deno.serve` entry files | Standard |
+| **Bun**: Elysia, `Bun.serve` | `package.json`, `bun.lock(b)`, `bunfig.toml`, `index.ts` entry files | Standard |
 
 Detection (above) is separate from diagnosis: `kestrel diagnose` recognizes failures from the output itself, whatever
 the stack. That includes Java and Kotlin (Spring Boot, JDBC, Maven/Gradle), Rust (panics, cargo), .NET (unhandled

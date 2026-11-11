@@ -50,8 +50,9 @@ Every package in the build spec's package map now exists.
    directories and anything matched by `.gitignore` (root and nested), and stops at `MaxDepth` (3),
    `MaxFiles` (5000), or the time budget (3s). A stop is reported as `scan.truncated` with a reason. The walk
    only records file names; it doesn't open files.
-2. **Analyze.** Per directory, each analyzer (Node, Go, Python, JVM, PHP, Ruby, Rust, Compose) reads only the
-   manifests it needs, through one guarded reader. That reader resolves symlinks and refuses anything outside
+2. **Analyze.** Per directory, each analyzer (Node, Go, Python, JVM, PHP, Ruby, Rust, Deno, .NET, Elixir, Compose)
+   reads only the manifests it needs, through one guarded reader. Analyzers register themselves
+   (`registerAnalyzer`, in `internal/discovery/registry.go`) and run in a fixed order. That reader resolves symlinks and refuses anything outside
    the root, files over 1 MiB, and non-regular files.
 
 A post-pass then reconciles the results:

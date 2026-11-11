@@ -40,6 +40,7 @@ var nodeFrameworks = []nodeFramework{
 	{"fastify", "fastify", "", 0},
 	{"koa", "koa", "", 0},
 	{"hono", "hono", "", 0},
+	{"elysia", "elysia", "", 3000},
 }
 
 var nodeLibs = libMap{
@@ -60,6 +61,7 @@ var nodeLockfiles = []struct{ file, pm string }{
 	{"yarn.lock", "yarn"},
 	{"bun.lockb", "bun"},
 	{"bun.lock", "bun"},
+	{"bunfig.toml", "bun"}, // not a lockfile, but only Bun projects have one
 	{"package-lock.json", "npm"},
 }
 
@@ -121,6 +123,8 @@ func (s *scanner) analyzeNode(dir string) []*candidate {
 		c.setCommand("node "+path.Clean(pkg.Main), api.ConfidenceLow, api.Source{File: file, Line: lineOf(raw, `"main"`), Note: "main entry; no start script"})
 	case s.has(joinRel(dir, "server.js")):
 		c.setCommand("node server.js", api.ConfidenceLow, api.Source{File: joinRel(dir, "server.js"), Note: "conventional entry file; no start script"})
+	default:
+		s.bunEntry(c, dir, pkg)
 	}
 	if c.Command == nil && fw == nil {
 		// A library package: worth noting as a technology, not a service.
@@ -211,5 +215,43 @@ func nodeRun(pm, script string) string {
 		return "bun run " + script
 	default: // pnpm, yarn
 		return pm + " " + script
+	}
+}
+
+var (
+	bunServeRe   = regexp.MustCompile(`Bun\.serve\(`)
+	listenCallRe = regexp.MustCompile(`\.listen\(\s*(\d{2,5})\b`) // Elysia, Hono-on-Bun, and friends
+)
+
+// bunEntry finds a Bun server with no start script: `bun init` projects have
+// an index.ts (the package's "module" field) that calls Bun.serve or Elysia.
+func (s *scanner) bunEntry(c *candidate, dir string, pkg packageJSON) {
+	if c.PackageManager != "bun" {
+		return
+	}
+	for _, entry := range []string{"index.ts", "src/index.ts", "server.ts", "index.js", "src/index.js"} {
+		rel := joinRel(dir, entry)
+		src, ok := s.readSeen(rel)
+		if !ok {
+			continue
+		}
+		serves := bunServeRe.Match(src)
+		if !serves && c.Framework != "elysia" && c.Framework != "hono" {
+			continue
+		}
+		c.httpish = true
+		note := "Bun.serve entry"
+		if !serves {
+			note = c.Framework + " entry"
+		}
+		c.setCommand("bun run "+entry, api.ConfidenceMedium, api.Source{File: rel, Line: lineOf(src, "Bun.serve("), Note: note + "; no start script"})
+		if p, line := findPort(src, vitePortRe); p > 0 {
+			c.offerPort(p, api.ConfidenceHigh, api.Source{File: rel, Line: line, Note: "port in server options"})
+		} else if p, line := findPort(src, listenCallRe); p > 0 {
+			c.offerPort(p, api.ConfidenceHigh, api.Source{File: rel, Line: line, Note: "port in listen() call"})
+		} else if serves {
+			c.offerPort(3000, api.ConfidenceMedium, api.Source{File: rel, Line: lineOf(src, "Bun.serve("), Note: "Bun.serve default port"})
+		}
+		return
 	}
 }

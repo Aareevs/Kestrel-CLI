@@ -1,0 +1,14 @@
+Project  <root>
+Stack    elixir
+
+Service candidates (1)
+
+  shop  elixir (phoenix) · .                             high
+    command  mix phx.server                              mix.exs:15
+    port     4001 (high)                                 config/dev.exs:4 · endpoint port
+    health   http http://localhost:4001/                 no health endpoint detected; probes the root path
+    needs    postgres? (inferred, not detected as a service)  mix.exs:18 · uses postgrex
+             redis? (inferred, not detected as a service)  mix.exs:19 · uses redix
+
+Scanned 2 files in 2 directories (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

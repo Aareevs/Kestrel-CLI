@@ -37,14 +37,15 @@ func TestAnalyzerRegistryValidatesAndOrders(t *testing.T) {
 	}
 }
 
-// The built-ins keep the order they always ran in, so existing candidates and
-// the numbered suffixes of same-named ones don't change.
+// The original analyzers keep the order they always ran in (new ecosystems come
+// after them), so existing candidates and the numbered suffixes of same-named
+// ones don't change.
 func TestBuiltInAnalyzersRunInTheirOriginalOrder(t *testing.T) {
 	var got []string
 	for _, a := range registeredAnalyzers() {
 		got = append(got, a.name)
 	}
-	if strings.Join(got, ",") != "node,go,python,jvm,php,ruby,rust" {
+	if !strings.HasPrefix(strings.Join(got, ",")+",", "node,go,python,jvm,php,ruby,rust,") {
 		t.Fatalf("built-in order = %v", got)
 	}
 }

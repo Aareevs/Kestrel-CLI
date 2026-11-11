@@ -1,0 +1,13 @@
+Project  <root>
+Stack    deno
+
+Service candidates (1)
+
+  storefront  deno (fresh) · .                           high
+    command  deno task dev                               deno.json:5
+    port     8000 (medium)                               deno.json · Fresh default port
+    health   http http://localhost:8000/                 no health endpoint detected; probes the root path
+    needs    postgres? (inferred, not detected as a service)  deno.json:10 · imports postgres
+
+Scanned 3 files in 1 directory (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

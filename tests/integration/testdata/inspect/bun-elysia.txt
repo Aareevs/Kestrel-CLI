@@ -1,0 +1,13 @@
+Project  <root>
+Stack    node
+
+Service candidates (1)
+
+  edge-api  node (elysia) · .                            medium
+    command  bun run src/index.ts                        src/index.ts
+    port     3000 (high)                                 src/index.ts:5 · port in listen() call
+    health   http http://localhost:3000/                 no health endpoint detected; probes the root path
+    needs    redis? (inferred, not detected as a service)  package.json:7 · uses ioredis
+
+Scanned 4 files in 2 directories (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

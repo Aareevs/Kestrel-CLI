@@ -1,0 +1,14 @@
+Project  <root>
+Stack    dotnet
+
+Service candidates (1)
+
+  orders.api  dotnet (aspnet) · .                        high
+    command  dotnet run                                  Orders.Api.csproj:1
+    port     5114 (high)                                 Properties/launchSettings.json:6 · launch profile "http"
+    health   http http://localhost:5114/                 no health endpoint detected; probes the root path
+    needs    postgres? (inferred, not detected as a service)  Orders.Api.csproj:9 · references Npgsql.EntityFrameworkCore.PostgreSQL
+             redis? (inferred, not detected as a service)  Orders.Api.csproj:10 · references StackExchange.Redis
+
+Scanned 3 files in 2 directories (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

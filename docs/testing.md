@@ -26,6 +26,10 @@ Review the diff line by line. A golden only proves output is stable. It doesn't 
 
 ## Adding a discovery fixture
 
+The fixtures are `node-vite`, `go-api`, `compose-stack`, `python-django`, `dotnet-api`, `phoenix-app`,
+`bun-elysia`, and `deno-fresh`. Every golden is reviewed line by line against the fixture's files (each line
+number, command, and port).
+
 Ecosystems are analyzers registered in `internal/discovery/registry.go`. A new one lives in its own file and
 registers itself: `func init() { registerAnalyzer("elixir", 80, (*scanner).analyzeElixir) }`. Analyzers run in
 `(order, name)` order, never registration order. The built-ins use orders 10–70, so a new one takes 80 or more
