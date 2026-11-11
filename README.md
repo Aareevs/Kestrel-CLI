@@ -137,7 +137,11 @@ When AI coding agents (Claude Code, Cursor, Windsurf, VS Code) debug through raw
 `kestrel mcp` provides a **read-only** Model Context Protocol (MCP) server over standard stdio. Agents query pre-correlated causal graphs, ranked root-cause hypotheses, and error timelines directly instead of guessing:
 
 ```bash
-# Add to Claude Code
+# Add it to the project's MCP config (claude-code, cursor or vscode)
+kestrel mcp init --client claude-code
+
+# Or just print the entry: kestrel mcp config --client cursor
+# Or by hand, with Claude Code:
 claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 ```
 

@@ -355,3 +355,37 @@ func TestWelcomeScreen(t *testing.T) {
 		t.Fatalf("welcome after a failure: exit %d\n%s%s", code, out, errs)
 	}
 }
+
+func TestMCPInitAndConfigCommands(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	project, _ = filepath.EvalSymlinks(project)
+
+	r := run(t, project, nil, "mcp", "config", "--no-color")
+	if r.code != 0 || !strings.Contains(r.stdout, `"mcpServers"`) || !strings.Contains(r.stdout, "claude mcp add kestrel") || !strings.Contains(r.stdout, project) {
+		t.Fatalf("mcp config: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	if entries, _ := os.ReadDir(project); len(entries) != 0 {
+		t.Fatalf("`mcp config` wrote files: %v", entries)
+	}
+
+	code, out, errs := kestrelCmd(t, home, project, "mcp", "init", "--no-color")
+	if code != 0 || !strings.Contains(out, "created .mcp.json") {
+		t.Fatalf("mcp init: exit %d\n%s%s", code, out, errs)
+	}
+	if b, _ := os.ReadFile(filepath.Join(project, ".mcp.json")); !strings.Contains(string(b), `"kestrel"`) {
+		t.Fatalf(".mcp.json:\n%s", b)
+	}
+	if code, out, _ = kestrelCmd(t, home, project, "mcp", "init", "--no-color"); code != 0 || !strings.Contains(out, "nothing to do") {
+		t.Errorf("second init: exit %d\n%s", code, out)
+	}
+	// JSON output, a client without a project file, and a typo.
+	if code, out, _ = kestrelCmd(t, home, project, "mcp", "config", "--client", "cursor", "--json"); code != 0 || !strings.Contains(out, `"file": ".cursor/mcp.json"`) {
+		t.Errorf("config --json: exit %d\n%s", code, out)
+	}
+	if code, _, errs = kestrelCmd(t, home, project, "mcp", "init", "--client", "claude-desktop"); code != 2 || !strings.Contains(errs, "kestrel mcp config") {
+		t.Errorf("desktop init: exit %d\n%s", code, errs)
+	}
+	if code, _, errs = kestrelCmd(t, home, project, "mcp", "inti"); code != 2 || !strings.Contains(errs, "init") {
+		t.Errorf("typo: exit %d\n%s", code, errs)
+	}
+}
