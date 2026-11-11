@@ -13,7 +13,23 @@ The server works on one project: `--project`, or else the directory the client s
 ancestor with a `kestrel.yaml`). Recorded sessions come from `kestrel run` / `kestrel watch`, so keep using those
 as usual. The agent reads what they recorded.
 
-**Claude Code**
+**The short way.** From the project directory:
+
+```bash
+kestrel mcp init --client claude-code     # or: cursor, vscode
+```
+
+This writes the server entry into the client's project config (`.mcp.json`, `.cursor/mcp.json`,
+`.vscode/mcp.json`). It merges: other servers and keys in the file are kept. It never replaces a different
+existing `kestrel` entry unless you pass `--force`, it leaves a file alone that isn't plain JSON (for example
+one with comments), and `--dry-run` shows the result without writing. The entry uses the bare command `kestrel`
+when that is on your `PATH` and is this same program (so upgrading Kestrel doesn't break it), otherwise the
+absolute path of the binary you ran. Restart the client afterwards.
+
+`kestrel mcp config --client <name>` prints the entry instead of writing it (use that for `claude-desktop`,
+whose config is per user, or `generic`). `--json` gives the same thing as JSON.
+
+**Claude Code, by hand**
 
 ```bash
 claude mcp add kestrel -- kestrel mcp --project /path/to/your/project

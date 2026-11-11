@@ -200,6 +200,13 @@ func colorFlags(usage string, s output.Style) string {
 // config): no subcommand shows its help, and an unknown one is an error with
 // a suggestion, instead of silently printing help.
 func groupCommand(cmd *cobra.Command) {
+	rejectUnknownSubcommands(cmd)
+	cmd.RunE = func(cmd *cobra.Command, _ []string) error { return cmd.Help() }
+}
+
+// rejectUnknownSubcommands makes a mistyped subcommand an error with a
+// suggestion. For a command that also does something itself (kestrel mcp).
+func rejectUnknownSubcommands(cmd *cobra.Command) {
 	// cobra only applies its default (2) inside its own unknown-command path.
 	cmd.SuggestionsMinimumDistance = 2
 	cmd.Args = func(cmd *cobra.Command, args []string) error {
@@ -212,5 +219,4 @@ func groupCommand(cmd *cobra.Command) {
 		}
 		return &ExitError{Code: ExitUsage, Err: fmt.Errorf("%s", msg), Hint: true}
 	}
-	cmd.RunE = func(cmd *cobra.Command, _ []string) error { return cmd.Help() }
 }
