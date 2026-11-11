@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/Aareevs/Kestrel-CLI/internal/app"
 	"github.com/Aareevs/Kestrel-CLI/internal/output"
@@ -55,6 +57,12 @@ type Streams struct {
 	Getenv  func(string) string
 	Getwd   func() (string, error)
 	InIsTTY bool
+	// OutIsTTY is true when Out is an interactive terminal (the pickers need
+	// both ends).
+	OutIsTTY bool
+	// MakeRaw puts the terminal in raw mode for the pickers and returns a
+	// function that restores it. Nil means input is already a stream of keys.
+	MakeRaw func() (restore func(), err error)
 }
 
 // DefaultStreams returns the real process streams.
@@ -62,8 +70,20 @@ func DefaultStreams() Streams {
 	return Streams{
 		In: os.Stdin, Out: os.Stdout, Err: os.Stderr,
 		Getenv: os.Getenv, Getwd: os.Getwd,
-		InIsTTY: output.IsTerminal(os.Stdin),
+		InIsTTY: output.IsTerminal(os.Stdin), OutIsTTY: output.IsTerminal(os.Stdout),
+		MakeRaw: rawStdin,
 	}
+}
+
+// rawStdin switches the terminal on stdin to raw mode (keys arrive one at a
+// time, unechoed) and returns the function that puts it back.
+func rawStdin() (func(), error) {
+	fd := int(os.Stdin.Fd())
+	state, err := term.MakeRaw(fd)
+	if err != nil {
+		return nil, err
+	}
+	return func() { _ = term.Restore(fd, state) }, nil
 }
 
 // globals are the persistent flags shared by every command.
@@ -78,6 +98,7 @@ type globals struct {
 
 	streams Streams
 	style   output.Style
+	keys    *bufio.Reader // stdin for pickers, shared so typed-ahead keys carry over
 }
 
 func (g *globals) json() bool { return output.Format(g.format) == output.FormatJSON }

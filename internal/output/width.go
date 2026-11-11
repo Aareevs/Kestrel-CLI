@@ -26,6 +26,20 @@ func TerminalWidth(w any) int {
 	return cols
 }
 
+// TerminalHeight returns the row count of w when it is an interactive
+// terminal, and 0 otherwise.
+func TerminalHeight(w any) int {
+	f, ok := w.(*os.File)
+	if !ok || !IsTerminal(f) {
+		return 0
+	}
+	_, rows, err := term.GetSize(int(f.Fd()))
+	if err != nil || rows <= 0 {
+		return 0
+	}
+	return rows
+}
+
 // Fit shortens s to at most max columns, ending in an ellipsis when it cuts.
 // It counts runes (not bytes), and works on plain text: style it afterwards.
 // A max of 0 or less means no limit.
