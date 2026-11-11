@@ -43,7 +43,14 @@ tests on Linux, macOS, and Windows. If `proxy.golang.org` is flaky for you, `GOP
 
 ## Common contributions
 
-**A new error pattern** (a log shape Kestrel should recognize): register a `events.Pattern` from an `init()` (see
+The full walkthrough for the four ways to extend Kestrel (project pattern, built-in pattern, diagnosis rule,
+analyzer), with examples that compile, is [docs/extending.md](docs/extending.md). What each stack gets today is in
+[docs/ecosystems.md](docs/ecosystems.md).
+
+**A project-specific log shape** needs no code: add a `patterns:` entry to your `kestrel.yaml`
+([docs/configuration.md](docs/configuration.md#patterns)).
+
+**A new error pattern** (a log shape Kestrel should recognize for everyone): register a `events.Pattern` from an `init()` (see
 [`internal/events/registry.go`](internal/events/registry.go)) with an ID, a type, a severity, a regex, and example
 lines it **must** match and **must not** match. `Register` checks those examples, and the tests check that no
 earlier pattern already claims them. Order matters (first match wins), so give it a `Priority` before any more
@@ -61,6 +68,10 @@ suggest one next step for the user to run (Kestrel never runs it). The steps are
 
 **A new scenario**: drive it with `tests/fakesvc`, a scripted fake service, never a real database or network
 service. Wait on events, not sleeps. See [docs/testing.md](docs/testing.md).
+
+**Report output** (`--json`): the types are in `pkg/api`. After changing one, run `make schemas` to regenerate
+`docs/schemas/*.schema.json`; a test fails if you forget, and the integration tests validate real output against
+the schemas. Adding a field is compatible; changing or removing one is not.
 
 **Docs and README**: every command and output shown must be real. Mark anything not working as such.
 

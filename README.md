@@ -224,7 +224,9 @@ the stack. That includes Java and Kotlin (Spring Boot, JDBC, Maven/Gradle), Rust
 exceptions, Kestrel, MSBuild), Ruby and Rails, PHP and Laravel, and Docker and Compose (daemon, ports, images,
 builds, the compose file, container exits): crashes, port and database failures, missing code, and build and test
 failures. You can add your own shapes in `kestrel.yaml`. See
-[docs/events.md](docs/events.md).
+[docs/events.md](docs/events.md). What each stack gets (detection, failure recognition, advice) is in the
+[ecosystem matrix](docs/ecosystems.md), and [docs/extending.md](docs/extending.md) shows how to add a pattern, a
+rule or a whole stack.
 
 ---
 
@@ -233,6 +235,9 @@ failures. You can add your own shapes in `kestrel.yaml`. See
 - **[Architecture & Engine Design](docs/architecture.md)** — Package structure, supervision pipelines, and storage lifecycle.
 - **[Diagnosis Rules Catalog](docs/diagnosis-rules.md)** — Comprehensive catalog of incident correlation rules and evidence requirements.
 - **[Verification Specification](docs/verification.md)** — Continuous stability window algorithm and verification verdicts.
+- **[Ecosystem Matrix](docs/ecosystems.md)** — What each stack gets: detection, failure recognition, and diagnosis advice.
+- **[Extending Kestrel](docs/extending.md)** — Add a project pattern, a built-in pattern, a diagnosis rule, or a whole ecosystem.
+- **[JSON Schemas](docs/schemas/README.md)** — Schemas for `diagnose`, `timeline` and `verify` output (`kestrel schema`).
 - **[MCP Server Reference](docs/mcp.md)** — Tool schemas and agent configuration guides for Cursor, Claude, and VS Code.
 - **[Configuration Guide](docs/configuration.md)** — Complete schema documentation for `kestrel.yaml`.
 - **[Security & Privacy Model](docs/security.md)** — Threat model, redaction rules, and process execution safeguards.
