@@ -93,6 +93,12 @@ kestrel verify    # or: kestrel v
 
 Type `kestrel` with nothing after it, in a terminal, and you get a short, static welcome: the logo, a live summary of the current project (stack, services found, whether there is a `kestrel.yaml`, how the last session went), and a few commands that fit where the project is (`kestrel init` when there is no config, `kestrel why` after a failed run, and so on). It only reads: it creates no files and runs nothing. Piped, or with `--json` / `--quiet`, bare `kestrel` prints the command list as before.
 
+### The live status view (`kestrel watch`)
+
+In a terminal, `kestrel watch` holds a small table of your services at the top of the screen (state, uptime, error count and the latest detail) while their logs scroll underneath. It updates as services start, pass or fail their probes, and crash. When the session ends the terminal is given back and the usual summary prints below. Anything that was on screen before is pushed into your scrollback, not erased.
+
+It is only used when output is a terminal with room for it (about 50 columns and the table plus 6 rows). Piped output, `--json`, `--quiet`, `TERM=dumb`, a small window, and Windows get the plain log stream, and `--plain` turns it off anywhere. `kestrel run` never pins a table.
+
 ### Command & Flag Shortcuts
 
 | Quick Command | Full Command | Description |

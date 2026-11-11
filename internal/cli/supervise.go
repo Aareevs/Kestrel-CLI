@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -59,7 +60,7 @@ func newRunCmd(g *globals) *cobra.Command {
 			}
 			return g.supervise(cmd.Context(), func(o app.SuperviseOptions) (*app.Outcome, error) {
 				return a.RunCommands(cmd.Context(), cwd, args, named, name, o)
-			}, grace)
+			}, grace, false)
 		}),
 	}
 	// Everything after the command is passed to it untouched.
@@ -71,7 +72,10 @@ func newRunCmd(g *globals) *cobra.Command {
 }
 
 func newWatchCmd(g *globals) *cobra.Command {
-	var grace time.Duration
+	var (
+		grace time.Duration
+		plain bool
+	)
 	cmd := &cobra.Command{
 		Use:     "watch [service...]",
 		Aliases: []string{"w", "start"},
@@ -86,16 +90,31 @@ func newWatchCmd(g *globals) *cobra.Command {
 			}
 			return g.supervise(cmd.Context(), func(o app.SuperviseOptions) (*app.Outcome, error) {
 				return a.Watch(cmd.Context(), args, o)
-			}, grace)
+			}, grace, !plain)
 		}),
 	}
 	cmd.Flags().DurationVar(&grace, "grace", 5*time.Second, "time to wait after SIGTERM before SIGKILL on shutdown")
+	cmd.Flags().BoolVar(&plain, "plain", false, "stream log lines only, without the pinned status table")
 	return cmd
 }
 
+// canPin reports whether the status table can be pinned above the log: output
+// is an interactive terminal that understands cursor control, and the user
+// asked for neither JSON nor quiet. Windows is left out until it is tested
+// there, since the console needs virtual-terminal mode switched on.
+func (g *globals) canPin() bool {
+	return g.streams.OutIsTTY && !g.json() && !g.quiet && runtime.GOOS != "windows" && g.streams.Getenv("TERM") != "dumb"
+}
+
 // supervise renders a run/watch session and maps its outcome to an exit code.
-func (g *globals) supervise(ctx context.Context, start func(app.SuperviseOptions) (*app.Outcome, error), grace time.Duration) error {
+// With pin, a status table is held at the top of the terminal while it runs.
+func (g *globals) supervise(ctx context.Context, start func(app.SuperviseOptions) (*app.Outcome, error), grace time.Duration, pin bool) error {
 	var live *output.Live
+	defer func() {
+		if live != nil {
+			live.Close() // always give the terminal back
+		}
+	}()
 	o := app.SuperviseOptions{
 		StopGrace: grace,
 		Warn: func(msg string) {
@@ -103,14 +122,17 @@ func (g *globals) supervise(ctx context.Context, start func(app.SuperviseOptions
 		},
 		OnSession: func(id string, names []string) {
 			live = output.NewLive(g.streams.Out, g.style, g.quiet, g.json(), names)
-			if cols := output.TerminalWidth(g.streams.Out); cols > 0 && !g.json() {
+			if cols, _ := g.termSize(); cols > 0 && !g.json() {
 				home, _ := os.UserHomeDir()
 				live.Tidy(cols, g.projectRoot(), home)
+			}
+			if pin && g.canPin() {
+				live.Pin(output.NewPane(g.streams.Out, g.style, names, g.termSize, time.Now))
 			}
 			if !g.json() && !g.quiet {
 				head := fmt.Sprintf("%s session %s · %s · Ctrl-C to stop", g.style.Bold("kestrel"), id, strings.Join(names, ", "))
 				plain := fmt.Sprintf("kestrel session %s · %s · Ctrl-C to stop", id, strings.Join(names, ", "))
-				if cols := output.TerminalWidth(g.streams.Out); cols > 0 && len([]rune(plain)) > cols {
+				if cols, _ := g.termSize(); cols > 0 && len([]rune(plain)) > cols {
 					// A narrow terminal: services on their own line.
 					head = fmt.Sprintf("%s session %s · Ctrl-C to stop\n  %s", g.style.Bold("kestrel"), id, strings.Join(names, ", "))
 				}
@@ -133,6 +155,9 @@ func (g *globals) supervise(ctx context.Context, start func(app.SuperviseOptions
 	}()
 
 	out, err := start(o)
+	if live != nil {
+		live.Close() // before the summary, so it lands below the table
+	}
 	if err != nil {
 		return appErr(err)
 	}

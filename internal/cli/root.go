@@ -64,6 +64,17 @@ type Streams struct {
 	// MakeRaw puts the terminal in raw mode for the pickers and returns a
 	// function that restores it. Nil means input is already a stream of keys.
 	MakeRaw func() (restore func(), err error)
+	// TermSize reports the terminal's columns and rows for the pinned status
+	// view. Nil means ask Out (tests supply a fixed size).
+	TermSize func() (cols, rows int)
+}
+
+// termSize is the terminal's current size, (0, 0) when unknown.
+func (g *globals) termSize() (int, int) {
+	if g.streams.TermSize != nil {
+		return g.streams.TermSize()
+	}
+	return output.TerminalWidth(g.streams.Out), output.TerminalHeight(g.streams.Out)
 }
 
 // DefaultStreams returns the real process streams.

@@ -29,6 +29,9 @@ type Live struct {
 	// project root and the home directory, used to shorten lifecycle lines.
 	cols       int
 	root, home string
+
+	pane *Pane
+	stop chan struct{}
 }
 
 // NewLive returns a renderer. names sets the column width and color order.
@@ -57,6 +60,57 @@ func (l *Live) Tidy(cols int, root, home string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.cols, l.root, l.home = cols, root, home
+}
+
+// Pin shows p, the status table, above the scrolling log, and keeps it current
+// (including a once-a-second repaint for uptimes) until Close. It reports
+// whether the pane is on; a terminal that is too small is left alone. Call it
+// before the first Emit.
+func (l *Live) Pin(p *Pane) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.json || !p.Start() {
+		return false
+	}
+	l.pane = p
+	l.stop = make(chan struct{})
+	go func(stop <-chan struct{}) {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				l.mu.Lock()
+				if l.pane != nil {
+					l.pane.Redraw()
+				}
+				l.mu.Unlock()
+			}
+		}
+	}(l.stop)
+	return true
+}
+
+// observe feeds an event to the pane. The caller holds the lock.
+func (l *Live) observe(ev api.Event) {
+	if l.pane != nil && l.pane.Observe(ev) {
+		l.pane.Redraw()
+	}
+}
+
+// Close takes the pinned table down and gives the terminal back. It is safe to
+// call more than once, or when nothing was pinned.
+func (l *Live) Close() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.pane == nil {
+		return
+	}
+	close(l.stop)
+	l.pane.Close()
+	l.pane = nil
 }
 
 // lifecycle prepares the started message (it carries the whole command) for the
@@ -106,6 +160,7 @@ func (l *Live) Emit(ev api.Event) {
 		_ = l.enc.Encode(ev)
 		return
 	}
+	defer l.observe(ev)
 	if l.quiet && !important(ev) {
 		return
 	}
