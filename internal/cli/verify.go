@@ -3,6 +3,9 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,6 +22,8 @@ func newVerifyCmd(g *globals) *cobra.Command {
 		all         bool
 		allowExec   bool
 		interactive bool
+		mdFile      string
+		junitFile   string
 		o           app.VerifyOptions
 	)
 	cmd := &cobra.Command{
@@ -31,7 +36,10 @@ func newVerifyCmd(g *globals) *cobra.Command {
 			"a fix. Commands in verify.checks run only with --allow-exec, or after you confirm each one in a\n" +
 			"terminal. Verify never starts, restarts, or signals your services.\n\n" +
 			"Verdicts: resolved, partially_resolved, still_failing, inconclusive.\n" +
-			"Exit codes: 0 resolved, 1 still failing or partially resolved, 3 inconclusive.",
+			"Exit codes: 0 resolved, 1 still failing or partially resolved, 3 inconclusive.\n\n" +
+			"For CI: --format markdown (a job summary) or --format junit prints that report instead of the text\n" +
+			"one, and --markdown FILE / --junit FILE also write them to files, whatever --format is. The exit code\n" +
+			"is the same either way.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) error {
 			if o.Window <= 0 || o.Interval <= 0 {
@@ -57,12 +65,27 @@ func newVerifyCmd(g *globals) *cobra.Command {
 			if err != nil {
 				return appErr(err)
 			}
-			if g.json() {
+			switch g.format {
+			case "json":
 				if err := output.WriteJSON(g.streams.Out, rep); err != nil {
 					return err
 				}
-			} else {
+			case "markdown":
+				output.VerificationMarkdown(g.streams.Out, rep)
+			case "junit":
+				if err := output.VerificationJUnit(g.streams.Out, rep); err != nil {
+					return err
+				}
+			default:
 				output.Verification(g.streams.Out, rep, g.text())
+			}
+			// Files for CI, written whatever the console format is, and before the
+			// exit code is decided so a failing run still leaves its report.
+			if err := writeReport(mdFile, func(w io.Writer) error { output.VerificationMarkdown(w, rep); return nil }); err != nil {
+				return err
+			}
+			if err := writeReport(junitFile, func(w io.Writer) error { return output.VerificationJUnit(w, rep) }); err != nil {
+				return err
 			}
 			return verifyExit(rep.Verdict)
 		}),
@@ -73,8 +96,37 @@ func newVerifyCmd(g *globals) *cobra.Command {
 	f.IntVarP(&o.Incident, "incident", "I", 0, "incident number to verify (default: the latest)")
 	f.BoolVarP(&interactive, "interactive", "i", false, "pick the session and incident from a list (in a terminal)")
 	f.DurationVarP(&o.Window, "window", "w", app.DefaultVerifyWindow, "stability window: how long every check must keep passing")
+	f.StringVar(&mdFile, "markdown", "", "also write the report as Markdown to this file (overwrites it)")
+	f.StringVar(&junitFile, "junit", "", "also write the report as JUnit XML to this file (overwrites it)")
 	f.DurationVar(&o.Interval, "interval", app.DefaultVerifyInterval, "time between samples within the window")
 	return cmd
+}
+
+// writeReport writes a CI report to path (when one was asked for), through a
+// temporary file, so a reader never sees half a report. The directory must exist.
+func writeReport(path string, render func(io.Writer) error) error {
+	if path == "" {
+		return nil
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".kestrel-report-*")
+	if err != nil {
+		return &ExitError{Code: ExitInternal, Err: fmt.Errorf("cannot write %s: %w", path, err)}
+	}
+	defer os.Remove(tmp.Name())
+	if err := render(tmp); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return &ExitError{Code: ExitInternal, Err: fmt.Errorf("cannot write %s: %w", path, err)}
+	}
+	return nil
 }
 
 // authorizer decides whether a configured command may run: --allow-exec, or
