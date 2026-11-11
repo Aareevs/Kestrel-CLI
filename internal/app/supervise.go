@@ -82,13 +82,13 @@ func (a *App) RunCommands(ctx context.Context, cwd string, argv []string, named 
 			name = cleanServiceName(filepath.Base(argv[0]))
 		}
 		specs = append(specs, process.ServiceSpec{
-			Name: name, Run: &process.Spec{Argv: argv, Dir: cwd, Env: os.Environ()},
+			Name: name, Run: &process.Spec{Argv: argv, Dir: cwd, Env: childEnv(os.Environ(), nil)},
 			Command: displayArgv(argv), AutoProbe: true,
 		})
 	}
 	for _, n := range named {
 		specs = append(specs, process.ServiceSpec{
-			Name: n.Name, Run: &process.Spec{Shell: n.Command, Dir: cwd, Env: os.Environ()},
+			Name: n.Name, Run: &process.Spec{Shell: n.Command, Dir: cwd, Env: childEnv(os.Environ(), nil)},
 			Command: n.Command, AutoProbe: true,
 		})
 	}
@@ -140,7 +140,7 @@ func (a *App) Watch(ctx context.Context, names []string, o SuperviseOptions) (*O
 			if s.Dir != "" {
 				dir = filepath.Join(a.ProjectRoot, s.Dir)
 			}
-			sp.Run = &process.Spec{Shell: s.Command, Dir: dir, Env: mergeEnv(os.Environ(), env[s.Name])}
+			sp.Run = &process.Spec{Shell: s.Command, Dir: dir, Env: childEnv(os.Environ(), env[s.Name])}
 		}
 		specs = append(specs, sp)
 	}
@@ -197,6 +197,37 @@ func selectServices(cfg *config.Config, names []string) (map[string]bool, error)
 		}
 	}
 	return sel, nil
+}
+
+// childEnv is the environment for a service Kestrel starts: the parent's, with
+// the service's own variables on top, plus PYTHONUNBUFFERED=1 unless either one
+// sets it (to anything, even empty, which turns it back off). Without it a
+// Python service writing to Kestrel's pipe block-buffers its output, so its
+// "listening on port N" line or last error can arrive late or be lost when it is
+// stopped, and diagnosis then has nothing to go on. Other runtimes ignore it.
+func childEnv(base []string, extra map[string]string) []string {
+	if _, set := extra["PYTHONUNBUFFERED"]; !set {
+		set := false
+		for _, kv := range base {
+			if k, _, _ := strings.Cut(kv, "="); k == "PYTHONUNBUFFERED" {
+				set = true
+				break
+			}
+		}
+		if !set {
+			if extra == nil {
+				extra = map[string]string{}
+			} else { // never modify the caller's map
+				m := make(map[string]string, len(extra)+1)
+				for k, v := range extra {
+					m[k] = v
+				}
+				extra = m
+			}
+			extra["PYTHONUNBUFFERED"] = "1"
+		}
+	}
+	return mergeEnv(base, extra)
 }
 
 func mergeEnv(base []string, extra map[string]string) []string {
