@@ -63,6 +63,22 @@ func (r PortConflict) Evaluate(c *Context) []api.Hypothesis {
 			if port > 0 {
 				h.NextStep.Command = listenerCommand(c.goos(), port)
 			}
+			// When the holder is another service of this very session, say so:
+			// the generic "some other process" would be wrong, and the fix is
+			// to give one of the two a different port.
+			if owner, ok := c.Graph.PortOwner(port); ok && port > 0 && owner != svc {
+				h.Title = fmt.Sprintf("%s could not start: %s is already in use by %s", svc, portText, owner)
+				h.Explanation = fmt.Sprintf("%s tried to listen on %s, but %s, another service in this session, already listens on it. Two services can't share a port.", svc, portText, owner)
+				h.NextStep = api.NextStep{Description: fmt.Sprintf("Give %s or %s a different port (they both use %s).", svc, owner, portText)}
+				factors = append(factors, fmt.Sprintf("%s is known to listen on %s", owner, portText))
+				for _, e := range c.eventsOf(owner, api.EventLogLine, api.EventProbeReady) {
+					if e.Attrs.PatternID == "L001-listening" && e.Attrs.Port == port || e.Type == api.EventProbeReady && e.Attrs.Port == port {
+						h.Supporting = append(h.Supporting, evidence(e, describe(e)))
+						break
+					}
+				}
+				h.Confidence.Factors = factors
+			}
 			if bind.Attrs.PatternID == "P035-docker-port-allocated" && port > 0 {
 				// Docker said the host port is taken, and the holder is often another container.
 				h.Explanation = fmt.Sprintf("Docker could not publish %s on the host: it is already allocated, usually to another container or a local process. "+
