@@ -57,6 +57,35 @@ func withNote(src api.Source) string {
 	return ref
 }
 
+// workspaceBlock summarizes a monorepo workspace: how many members it has,
+// which are services, and a root script that only runs the members.
+func workspaceBlock(w io.Writer, ws api.Workspace, o TextOptions) {
+	s := o.Style
+	isService := map[string]bool{}
+	for _, d := range ws.Services {
+		isService[d] = true
+	}
+	var libs []string
+	for _, m := range ws.Members {
+		if !isService[m] {
+			libs = append(libs, m)
+		}
+	}
+	where := ""
+	if ws.Root != "." {
+		where = " in " + ws.Root
+	}
+	fmt.Fprintf(w, "%s %s workspace%s · %d %s, %d %s  %s\n", s.Bold("Workspace"), ws.Kind, where,
+		len(ws.Members), plural2(len(ws.Members), "member", "members"),
+		len(ws.Services), plural2(len(ws.Services), "service", "services"), s.Dim(ws.File))
+	if len(libs) > 0 {
+		fmt.Fprintf(w, "           %s %s\n", s.Dim("not services:"), strings.Join(libs, ", "))
+	}
+	if ws.Orchestrator != "" {
+		fmt.Fprintf(w, "           %s\n", s.Dim("the root script only runs the members ("+ws.Orchestrator+"), so it isn't listed as a service"))
+	}
+}
+
 // Inspect renders an inspect result.
 func Inspect(w io.Writer, r *api.InspectResult, o TextOptions) {
 	s := o.Style
@@ -68,6 +97,9 @@ func Inspect(w io.Writer, r *api.InspectResult, o TextOptions) {
 	fmt.Fprintf(w, "%s    %s\n", s.Bold("Stack"), stack)
 	if r.ConfigFile != "" {
 		fmt.Fprintf(w, "%s   %s\n", s.Bold("Config"), r.ConfigFile)
+	}
+	for _, ws := range r.Workspaces {
+		workspaceBlock(w, ws, o)
 	}
 	fmt.Fprintln(w)
 
