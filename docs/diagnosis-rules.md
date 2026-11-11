@@ -129,14 +129,16 @@ connection target is unknown, and when a supervised service owns the port (`K002
 
 ### `K006-missing-module`
 
-**Detects:** "Cannot find module", `ModuleNotFoundError`, a missing Go package (pattern `P013`).
+**Detects:** "Cannot find module", `ModuleNotFoundError`, a missing Go package, a missing Java class
+(`ClassNotFoundException`, `NoClassDefFoundError`, "Could not find or load main class") (pattern `P013`).
 
 **Evidence:** the missing-module lines, and the exit after them, if any.
 
 **Confidence:** `high` with the exit, `medium` without it.
 
 **Next step:** install the project's dependencies (`npm install`, `pip install -r requirements.txt`,
-`go mod download`) and check the import path.
+`go mod download`) and check the import path. For a missing Java class: build the service (`./mvnw package`,
+`./gradlew build`) and check its classpath and main class.
 
 ## Adding a rule
 

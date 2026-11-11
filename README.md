@@ -177,6 +177,11 @@ claude mcp add kestrel -- kestrel mcp --project /path/to/your/project
 | **PHP**: Laravel | `composer.json`, `artisan` | Standard |
 | **Rust**: axum, actix-web, rocket, warp | `Cargo.toml`, `src/main.rs` | Standard |
 
+Detection (above) is separate from diagnosis: `kestrel diagnose` recognizes failures from the output itself, whatever
+the stack. That includes Java and Kotlin (Spring Boot startup and port failures, JDBC connection errors, missing
+classes, Maven/Gradle build and test failures), and you can add your own shapes in `kestrel.yaml`. See
+[docs/events.md](docs/events.md).
+
 ---
 
 ## Documentation & Architecture
