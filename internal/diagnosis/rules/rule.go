@@ -89,12 +89,17 @@ func firstOf(in *correlation.Incident, svc string, types ...api.EventType) (api.
 }
 
 // cause returns the most telling error line in lines: the last fatal one,
-// else the last error one.
+// else the last error one. Lines are plain output, or a connection failure
+// with no target (the Docker daemon being down, a database login failing): the
+// graph can't link those to another service, so they are the cause themselves.
+// A connection failure that names a target is evidence about a dependency
+// instead, and is handled through the graph.
 func cause(lines []api.Event) (api.Event, bool) {
 	var best api.Event
 	found := false
 	for _, e := range lines {
-		if e.Type != api.EventLogLine || e.Severity.Rank() < api.SeverityError.Rank() {
+		telling := e.Type == api.EventLogLine || (e.Type == api.EventDependencyConnFailed && targetOf(e) == "")
+		if !telling || e.Severity.Rank() < api.SeverityError.Rank() {
 			continue
 		}
 		if !found || e.Severity.Rank() >= best.Severity.Rank() {

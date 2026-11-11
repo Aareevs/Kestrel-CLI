@@ -63,6 +63,15 @@ func (r PortConflict) Evaluate(c *Context) []api.Hypothesis {
 			if port > 0 {
 				h.NextStep.Command = listenerCommand(c.goos(), port)
 			}
+			if bind.Attrs.PatternID == "P035-docker-port-allocated" && port > 0 {
+				// Docker said the host port is taken, and the holder is often another container.
+				h.Explanation = fmt.Sprintf("Docker could not publish %s on the host: it is already allocated, usually to another container or a local process. "+
+					"Neither was started by Kestrel, so Kestrel leaves them alone.", portText)
+				h.NextStep = api.NextStep{
+					Description: fmt.Sprintf("List the containers publishing %s (or see which process holds it), then stop that one yourself or publish %s on another host port. Kestrel never stops containers or processes it didn't start.", portText, svc),
+					Command:     fmt.Sprintf("docker ps --filter \"publish=%d\"", port),
+				}
+			}
 		}
 		out = append(out, h)
 	}
