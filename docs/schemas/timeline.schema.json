@@ -1,0 +1,360 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "description": "The version of this report format. Fields are added within a version; a change that removes or changes one bumps it.",
+      "const": 1
+    },
+    "session": {
+      "$ref": "#/$defs/SessionSummary"
+    },
+    "graph": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/GraphEdge"
+      }
+    },
+    "incidents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Incident"
+      }
+    },
+    "service": {
+      "type": "string"
+    },
+    "since": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TimelineEntry"
+      },
+      "description": "with --service: that service's key events"
+    },
+    "verifications": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/VerificationSummary"
+      },
+      "description": "Verifications are the `kestrel verify` runs against this session."
+    }
+  },
+  "$id": "https://github.com/Aareevs/Kestrel-CLI/docs/schemas/timeline.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "GraphEdge": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "event IDs, for inferred edges"
+        }
+      },
+      "description": "GraphEdge says From depends on To.",
+      "required": [
+        "from",
+        "to",
+        "kind"
+      ]
+    },
+    "Incident": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer"
+        },
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "event_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "correlation_strength": {
+          "type": "string",
+          "description": "CorrelationStrength is how the anomalies are linked to each other. It is separate from any causal confidence, which belongs to hypotheses.",
+          "enum": [
+            "strong",
+            "weak"
+          ]
+        },
+        "initiating_known": {
+          "type": "boolean",
+          "description": "Initiating is the earliest anomaly of the upstream-most failing service, when the evidence singles one out. InitiatingKnown is false otherwise."
+        },
+        "initiating_service": {
+          "type": "string"
+        },
+        "initiating_event_id": {
+          "type": "string"
+        },
+        "initiating_note": {
+          "type": "string"
+        },
+        "timeline": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TimelineEntry"
+          }
+        }
+      },
+      "description": "Incident is a group of related anomalies.",
+      "required": [
+        "number",
+        "start",
+        "end",
+        "services",
+        "event_ids",
+        "correlation_strength",
+        "initiating_known",
+        "timeline"
+      ]
+    },
+    "SessionSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "description": "run | watch"
+        },
+        "project_root": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "closed",
+            "interrupted"
+          ]
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "events": {
+          "type": "integer"
+        },
+        "errors": {
+          "type": "integer",
+          "description": "error + fatal events"
+        },
+        "dropped": {
+          "type": "integer"
+        },
+        "size_bytes": {
+          "type": "integer"
+        },
+        "write_errors": {
+          "type": "integer",
+          "description": "WriteErrors counts events that could not be fully persisted. Non-zero means the stored record is incomplete."
+        }
+      },
+      "description": "SessionSummary is one row of `kestrel sessions list`.",
+      "required": [
+        "id",
+        "mode",
+        "project_root",
+        "status",
+        "started_at",
+        "services",
+        "events",
+        "errors",
+        "dropped",
+        "size_bytes"
+      ]
+    },
+    "TimelineEntry": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "service": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "EventType classifies an event.",
+          "enum": [
+            "process_started",
+            "process_exited",
+            "process_crashed",
+            "log_line",
+            "startup_timeout",
+            "probe_ready",
+            "probe_failed",
+            "probe_recovered",
+            "port_bind_failed",
+            "dependency_conn_failed",
+            "restart",
+            "test_failed",
+            "collector_overload",
+            "verification_result"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "description": "Severity is an event's level.",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "fatal"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "last_healthy",
+            "first_anomaly",
+            "key",
+            "downstream_symptom",
+            "recovery",
+            "output"
+          ]
+        },
+        "claim": {
+          "type": "string",
+          "description": "ClaimLevel says how strongly something is known. Diagnosis output never blends levels: every statement carries one.",
+          "enum": [
+            "observed",
+            "correlated",
+            "hypothesis",
+            "verified",
+            "unresolved"
+          ]
+        }
+      },
+      "description": "TimelineEntry is one line of an incident timeline. Repeated events with the same fingerprint are collapsed: Count and Until describe the run.",
+      "required": [
+        "event_id",
+        "seq",
+        "time",
+        "count",
+        "service",
+        "type",
+        "severity",
+        "message",
+        "role",
+        "claim"
+      ]
+    },
+    "VerificationSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "verdict": {
+          "type": "string",
+          "description": "Verdict is the outcome of `kestrel verify`.",
+          "enum": [
+            "resolved",
+            "partially_resolved",
+            "still_failing",
+            "inconclusive"
+          ]
+        },
+        "incident": {
+          "type": "integer"
+        },
+        "window": {
+          "type": "string"
+        }
+      },
+      "description": "VerificationSummary is a past verification, as listed alongside a session.",
+      "required": [
+        "id",
+        "session_id",
+        "started_at",
+        "ended_at",
+        "verdict",
+        "window"
+      ]
+    }
+  },
+  "title": "kestrel timeline --json",
+  "description": "The report `kestrel timeline --json` prints (and the MCP tool get_failure_timeline returns): each incident's timeline, the dependency graph, and with --service that service's recorded output.",
+  "required": [
+    "schema_version",
+    "session",
+    "graph",
+    "incidents",
+    "verifications"
+  ]
+}

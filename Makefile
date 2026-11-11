@@ -8,7 +8,7 @@ LDFLAGS  := -s -w -X $(PKG)/internal/buildinfo.Version=$(VERSION) -X $(PKG)/inte
 STATICCHECK_VERSION ?= 2025.1.1
 GORELEASER_VERSION  ?= v2.18.2
 
-.PHONY: all build install test race vet fmt fmt-check lint cross check golden clean release-check release-snapshot
+.PHONY: all build install test race vet fmt fmt-check lint cross check golden schemas clean release-check release-snapshot
 
 all: check
 
@@ -53,6 +53,10 @@ release-check:
 
 release-snapshot:
 	go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) release --snapshot --clean
+
+# Regenerate docs/schemas/*.schema.json from the types in pkg/api.
+schemas:
+	go test ./internal/schemas -update
 
 # Regenerate golden files after an intentional output change; review the diff.
 golden:
