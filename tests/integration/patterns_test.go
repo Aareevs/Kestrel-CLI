@@ -94,3 +94,28 @@ func TestBadProjectPatternIsAConfigError(t *testing.T) {
 		t.Fatalf("a rejected config must not create a session: %+v", l.Sessions)
 	}
 }
+
+// A JVM service's own wording for a taken port (Spring Boot) is diagnosed as a
+// port conflict, with the holder left alone.
+func TestSpringPortConflictEndToEnd(t *testing.T) {
+	_, fake := buildBins(t)
+	home, project := t.TempDir(), t.TempDir()
+	project, _ = filepath.EvalSymlinks(project)
+	code, out, errs := kestrelCmd(t, home, project, "run", "--quiet", "--name", "orders", "--",
+		fake, "--name", "orders",
+		"--say", "APPLICATION FAILED TO START", "--say", "Web server failed to start. Port 18080 was already in use.",
+		"--exit-after", "400ms", "--exit-code", "1")
+	if code != 1 {
+		t.Fatalf("run exit %d\n%s%s", code, out, errs)
+	}
+	code, out, _ = kestrelCmd(t, home, project, "diagnose", "--format", "json")
+	rep := decode[api.DiagnosisReport](t, out)
+	if code != 1 || len(rep.Incidents) != 1 {
+		t.Fatalf("diagnose exit %d: %s", code, out)
+	}
+	top := rep.Incidents[0].Hypotheses[0]
+	if top.RuleID != "K001-port-conflict" || !strings.Contains(top.Title, "port 18080 is already in use") ||
+		top.NextStep.Command != "lsof -nP -iTCP:18080 -sTCP:LISTEN" && !strings.Contains(top.NextStep.Command, "18080") {
+		t.Fatalf("top: %+v", top)
+	}
+}

@@ -458,6 +458,17 @@ func (r DependencyNotRunning) Evaluate(c *Context) []api.Hypothesis {
 // ---------------------------------------------------------------------------
 // K006: a module or package the service needs is missing.
 
+// missingModuleStep suggests how to get the missing code, by what kind of
+// runtime reported it.
+func missingModuleStep(svc, msg string) string {
+	for _, jvm := range []string{"ClassNotFoundException", "NoClassDefFoundError", "main class", "jarfile"} {
+		if strings.Contains(msg, jvm) {
+			return fmt.Sprintf("Build %s so its classes and dependencies exist (e.g. ./mvnw package or ./gradlew build) and check its classpath and main class.", svc)
+		}
+	}
+	return fmt.Sprintf("Install %s's dependencies (e.g. npm install, pip install -r requirements.txt, go mod download) and check the import path.", svc)
+}
+
 type MissingModule struct{}
 
 func (MissingModule) ID() string { return "K006-missing-module" }
@@ -486,7 +497,7 @@ func (r MissingModule) Evaluate(c *Context) []api.Hypothesis {
 		h.Confidence = api.ConfidenceDetail{Level: level, Factors: factors}
 		h.Title = fmt.Sprintf("%s is missing a dependency: %s", svc, shorten(hits[0].Message, 70))
 		h.Explanation = fmt.Sprintf("%s tried to load code that isn't installed or isn't on its path: %q.", svc, shorten(hits[0].Message, 160))
-		h.NextStep = api.NextStep{Description: fmt.Sprintf("Install %s's dependencies (e.g. npm install, pip install -r requirements.txt, go mod download) and check the import path.", svc)}
+		h.NextStep = api.NextStep{Description: missingModuleStep(svc, hits[0].Message)}
 		out = append(out, h)
 	}
 	return out

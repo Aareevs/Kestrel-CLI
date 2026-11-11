@@ -319,6 +319,66 @@ func TestMissingModule(t *testing.T) {
 	}
 }
 
+// Java and Kotlin: Spring Boot's own wording for a taken port is recognized, so
+// the port-conflict diagnosis (and its lsof next step) works for JVM services.
+func TestSpringPortConflict(t *testing.T) {
+	s := newStream()
+	s.started(0, "orders")
+	s.line(100, "orders", "***************************")
+	s.line(110, "orders", "APPLICATION FAILED TO START")
+	s.line(120, "orders", "Web server failed to start. Port 8080 was already in use.")
+	s.crash(150, "orders", 1)
+	d := diagnose(t, api.Topology{Services: []api.ServiceTopology{{Name: "orders"}}}, s)[0]
+	top := d.Hypotheses[0]
+	if top.RuleID != "K001-port-conflict" || top.Confidence.Level != api.ConfidenceHigh || !strings.Contains(top.Title, "port 8080 is already in use") ||
+		top.NextStep.Command != "lsof -nP -iTCP:8080 -sTCP:LISTEN" {
+		t.Fatalf("top: %+v\nall: %s", top, ruleIDs(d))
+	}
+}
+
+func TestMissingJavaClassSuggestsABuild(t *testing.T) {
+	s := newStream()
+	s.started(0, "orders")
+	s.line(100, "orders", `Exception in thread "main" java.lang.NoClassDefFoundError: org/springframework/boot/SpringApplication`)
+	s.crash(120, "orders", 1)
+	d := diagnose(t, api.Topology{}, s)[0]
+	var found *api.Hypothesis
+	for i, h := range d.Hypotheses {
+		if h.RuleID == "K006-missing-module" {
+			found = &d.Hypotheses[i]
+		}
+	}
+	if found == nil || found.Confidence.Level != api.ConfidenceHigh || !strings.Contains(found.NextStep.Description, "./gradlew build") || strings.Contains(found.NextStep.Description, "npm install") {
+		t.Fatalf("got %s", ruleIDs(d))
+	}
+}
+
+// A JDBC "Connection to host:port refused" names its target, so a service that
+// can't reach the database is linked to the database by port, and the database
+// is diagnosed as the initiating failure.
+func TestJdbcRefusalLinksServiceToDatabase(t *testing.T) {
+	s := newStream()
+	s.started(0, "database")
+	s.line(100, "database", "FATAL:  database files are incompatible with server")
+	s.crash(110, "database", 1)
+	s.started(200, "api")
+	for i := 0; i < 6; i++ {
+		s.line(300+i*100, "api", "org.postgresql.util.PSQLException: Connection to localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is accepting TCP/IP connections.")
+	}
+	s.line(1000, "api", "HikariPool-1 - Exception during pool initialization.")
+	s.crash(1100, "api", 1)
+	topo := api.Topology{Services: []api.ServiceTopology{{Name: "database", Ports: []int{5432}}, {Name: "api"}}} // no declared dependency
+	d := diagnose(t, topo, s)[0]
+	if !d.Incident.InitiatingKnown || d.Incident.InitiatingService != "database" {
+		t.Fatalf("initiating = %q (known %v)\n%s", d.Incident.InitiatingService, d.Incident.InitiatingKnown, ruleIDs(d))
+	}
+	top := d.Hypotheses[0]
+	if top.RuleID != "K002-dependency-down" || top.Confidence.Level != api.ConfidenceHigh || top.Title != "database failed first; api failed because of it" ||
+		!strings.Contains(strings.Join(top.Confidence.Factors, " "), "api's connection errors target port 5432, which database owns") {
+		t.Fatalf("top: %s\nfactors: %v", ruleIDs(d), top.Confidence.Factors)
+	}
+}
+
 func TestDependentAlreadyFailingIsContradiction(t *testing.T) {
 	s := newStream()
 	s.line(0, "api", "dial tcp 127.0.0.1:5432: connect: connection refused") // before the db failed

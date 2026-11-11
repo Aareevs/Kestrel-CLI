@@ -103,9 +103,18 @@ pattern claims one of your `Match` examples.
 | `P009-go-panic` | `log_line` (fatal) | `panic:` / `fatal error:` at line start |
 | `P010-node-uncaught` | `log_line` (fatal) | uncaught exceptions, unhandled promise rejections |
 | `P011-python-traceback` | `log_line` (error) | `Traceback (most recent call last):` |
-| `P013-module-not-found` | `log_line` (error) | missing Node/Python modules, missing Go packages |
-| `P014-test-failed` | `test_failed` | `go test`, Jest, pytest failure summaries |
-| `L001-listening` | `log_line` (info) | announced listen addresses (`Listening on :8080`, Vite `Local:`, Uvicorn, Django, Flask, Next.js). Used by `run` to auto-probe the port |
+| `P013-module-not-found` | `log_line` (error) | missing Node/Python modules, missing Go packages, missing Java classes (`ClassNotFoundException`, `NoClassDefFoundError`, "Could not find or load main class", "Unable to access jarfile") |
+| `P014-test-failed` | `test_failed` | `go test`, Jest, pytest, Maven Surefire (`Tests run: …, Failures: 1`) and Gradle (`3 tests completed, 1 failed`, `> Task :test FAILED`) failure summaries |
+| `P016-spring-port-in-use` | `port_bind_failed` | Spring Boot's "Web server failed to start. Port 8080 was already in use." |
+| `P017-spring-startup-failed` | `log_line` (error) | `APPLICATION FAILED TO START`, "Application run failed", `BeanCreationException`, `UnsatisfiedDependencyException` |
+| `P018-jdbc-unavailable` | `dependency_conn_failed` | pgjdbc "Connection to host:port refused" (with its target), MySQL "Communications link failure", `CannotGetJdbcConnectionException`, Hikari pool initialization failures |
+| `P019-jvm-class-version` | `log_line` (error) | `UnsupportedClassVersionError`: the JVM is older than the code's target |
+| `P020-jvm-build-failed` | `log_line` (error) | Maven and Gradle build failures (`BUILD FAILED`, `COMPILATION ERROR`, "Failed to execute goal", "Execution failed for task") |
+| `P015-jvm-main-uncaught` | `log_line` (fatal) | `Exception in thread "main" …`: the JVM's main thread died |
+| `L001-listening` | `log_line` (info) | announced listen addresses (`Listening on :8080`, Vite `Local:`, Uvicorn, Django, Flask, Next.js, Spring's `Tomcat started on port(s): 8080`, Ktor's `Responding at …`). Used by `run` to auto-probe the port |
 
 The table is in match order: `P012` is checked before `P009` so `fatal error: runtime: out of memory` counts as
-out of memory, not as a generic fatal error.
+out of memory, not as a generic fatal error. The JVM patterns are specific shapes, so they go before `P015`: a
+JVM error often arrives as `Exception in thread "main" …`, and `P015` would otherwise claim it. (Java's
+`OutOfMemoryError` is still claimed by `P012` first, and a missing class by `P013`.) Java and Kotlin share the JVM
+and its messages, so these cover both.

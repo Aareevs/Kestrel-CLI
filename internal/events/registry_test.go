@@ -88,15 +88,28 @@ func TestRegisterOrdersByPriorityThenRegistration(t *testing.T) {
 
 func TestBuiltinsAreRegisteredInOrderAndNewPatternsGoAfter(t *testing.T) {
 	all := Patterns()
-	if len(all) != len(builtinPatterns) || len(all) == 0 {
-		t.Fatalf("%d registered, %d built in", len(all), len(builtinPatterns))
-	}
-	for i, p := range all {
-		if p.ID != builtinPatterns[i].ID || p.Priority != (i+1)*PriorityStep {
-			t.Fatalf("pattern %d is %s (priority %d), want %s", i, p.ID, p.Priority, builtinPatterns[i].ID)
+	// The built-in list keeps its order and its 100-spaced priorities, and
+	// every other registered pattern (e.g. the JVM ones) sits between them.
+	var builtins []Pattern
+	for _, p := range all {
+		if p.Priority%PriorityStep == 0 && p.Priority/PriorityStep <= len(builtinPatterns) {
+			builtins = append(builtins, p)
 		}
 	}
-	// A pattern registered without a priority runs after every built-in.
+	if len(builtins) != len(builtinPatterns) || len(builtins) == 0 {
+		t.Fatalf("%d built-ins found, %d declared", len(builtins), len(builtinPatterns))
+	}
+	for i, p := range builtins {
+		if p.ID != builtinPatterns[i].ID || p.Priority != (i+1)*PriorityStep {
+			t.Fatalf("built-in %d is %s (priority %d), want %s", i, p.ID, p.Priority, builtinPatterns[i].ID)
+		}
+	}
+	for i := 1; i < len(all); i++ {
+		if all[i-1].Priority > all[i].Priority {
+			t.Fatalf("patterns out of priority order: %s (%d) before %s (%d)", all[i-1].ID, all[i-1].Priority, all[i].ID, all[i].Priority)
+		}
+	}
+	// A pattern registered without a priority runs after every one of them.
 	set, err := withPattern(load(), sample("P906-late", `boom`))
 	if err != nil || set.list[len(set.list)-1].ID != "P906-late" {
 		t.Fatalf("late pattern placement: %v", err)
@@ -127,6 +140,7 @@ func TestRegisterGlobalRejectsDuplicatesWithoutChangingAnything(t *testing.T) {
 func TestClassifyWhileRegistering(t *testing.T) {
 	saved := current.Load()
 	t.Cleanup(func() { current.Store(saved) })
+	baseline := len(Patterns())
 
 	const writers, perWriter = 4, 25
 	var wg sync.WaitGroup
@@ -152,8 +166,8 @@ func TestClassifyWhileRegistering(t *testing.T) {
 		}(w)
 	}
 	wg.Wait()
-	if got := len(Patterns()); got != len(builtinPatterns)+writers*perWriter {
-		t.Fatalf("%d patterns registered, want %d (a registration was lost)", got, len(builtinPatterns)+writers*perWriter)
+	if got := len(Patterns()); got != baseline+writers*perWriter {
+		t.Fatalf("%d patterns registered, want %d (a registration was lost)", got, baseline+writers*perWriter)
 	}
 }
 

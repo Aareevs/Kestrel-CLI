@@ -200,18 +200,26 @@ var builtinPatterns = []Pattern{
 		Description: "a dependency or module is missing (not installed or wrong path)",
 		Type:        api.EventLogLine,
 		Severity:    api.SeverityError,
-		Re:          regexp.MustCompile(`(?:Error: Cannot find module|ModuleNotFoundError: No module named|ERR_MODULE_NOT_FOUND|cannot find package|no required module provides package)`),
-		Match:       []string{"Error: Cannot find module 'express'", "ModuleNotFoundError: No module named 'django'", "main.go:5:2: no required module provides package github.com/x/y"},
-		NoMatch:     []string{"loaded module express"},
+		Re:          regexp.MustCompile(`(?:Error: Cannot find module|ModuleNotFoundError: No module named|ERR_MODULE_NOT_FOUND|cannot find package|no required module provides package|java\.lang\.ClassNotFoundException|NoClassDefFoundError|Could not find or load main class|Unable to access jarfile)`),
+		Match: []string{
+			"Error: Cannot find module 'express'", "ModuleNotFoundError: No module named 'django'", "main.go:5:2: no required module provides package github.com/x/y",
+			"Caused by: java.lang.ClassNotFoundException: org.slf4j.LoggerFactory",
+			`Exception in thread "main" java.lang.NoClassDefFoundError: org/springframework/boot/SpringApplication`,
+			"Error: Could not find or load main class com.acme.Main",
+			"Error: Unable to access jarfile app.jar",
+		},
+		NoMatch: []string{"loaded module express", "loaded class com.acme.Main"},
 	},
 	{
 		ID:          "P014-test-failed",
 		Description: "a test run reported failures",
 		Type:        api.EventTestFailed,
 		Severity:    api.SeverityError,
-		Re:          regexp.MustCompile(`(?:^--- FAIL: |^FAIL\s+\S+|^Tests:\s+\d+ failed|^=+ \d+ failed|^FAILED \S+)`),
-		Match:       []string{"--- FAIL: TestCreateOrder (0.01s)", "FAIL\texample.com/orders\t0.123s", "Tests:       2 failed, 10 passed, 12 total", "===== 1 failed, 3 passed in 0.12s =====", "FAILED tests/test_api.py::test_create - AssertionError"},
-		NoMatch:     []string{"ok  \texample.com/orders\t0.1s", "PASS"},
+		Re:          regexp.MustCompile(`(?:^--- FAIL: |^FAIL\s+\S+|^Tests:\s+\d+ failed|^=+ \d+ failed|^FAILED \S+|^(?:\[(?:ERROR|WARNING)\] )?Tests run:.*(?:Failures: [1-9]|Errors: [1-9])|^\d+ tests completed, \d+ failed|^> Task :\S*test FAILED)`),
+		Match: []string{"--- FAIL: TestCreateOrder (0.01s)", "FAIL\texample.com/orders\t0.123s", "Tests:       2 failed, 10 passed, 12 total", "===== 1 failed, 3 passed in 0.12s =====", "FAILED tests/test_api.py::test_create - AssertionError",
+			"[ERROR] Tests run: 5, Failures: 1, Errors: 0, Skipped: 0", "Tests run: 5, Failures: 0, Errors: 2, Skipped: 0",
+			"3 tests completed, 1 failed", "> Task :test FAILED"},
+		NoMatch: []string{"ok  \texample.com/orders\t0.1s", "PASS", "[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0", "> Task :test"},
 	},
 	{
 		ID:          "L001-listening",
@@ -222,7 +230,9 @@ var builtinPatterns = []Pattern{
 			`(?:listening|running|serving|started server|server started|available|ready)\b[^\n]*?(?:https?://)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::\]|\[::1\]|::)?:(?P<port>\d{2,5})\b` +
 			`|(?:listening|running|serving) on port (?P<port2>\d{2,5})` +
 			`|Local:\s+https?://[^\s:/]+:(?P<port3>\d{2,5})` +
-			`|Starting development server at https?://[^\s:/]+:(?P<port4>\d{2,5}))`),
+			`|Starting development server at https?://[^\s:/]+:(?P<port4>\d{2,5})` +
+			`|(?:Tomcat|Jetty|Undertow|Netty) started on port(?:\(s\))?:? (?P<port5>\d{2,5})` +
+			`|Responding at https?://[^\s:/]+:(?P<port6>\d{2,5}))`),
 		Match: []string{
 			"Listening on :8080",
 			"  ➜  Local:   http://localhost:5173/",
@@ -231,8 +241,11 @@ var builtinPatterns = []Pattern{
 			" * Running on http://127.0.0.1:5000",
 			"Server listening on port 3000",
 			"ready - started server on 0.0.0.0:3000, url: http://localhost:3000",
+			"Tomcat started on port(s): 8080 (http) with context path ''",
+			"Netty started on port 8080",
+			"Responding at http://0.0.0.0:8080",
 		},
-		NoMatch: []string{"connecting to localhost:5432", "listen tcp :8080: bind: address already in use"},
+		NoMatch: []string{"connecting to localhost:5432", "listen tcp :8080: bind: address already in use", "Tomcat initialized with port 8080 (http)"},
 	},
 }
 
