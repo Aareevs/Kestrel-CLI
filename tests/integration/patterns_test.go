@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,6 +117,31 @@ func TestSpringPortConflictEndToEnd(t *testing.T) {
 	top := rep.Incidents[0].Hypotheses[0]
 	if top.RuleID != "K001-port-conflict" || !strings.Contains(top.Title, "port 18080 is already in use") ||
 		top.NextStep.Command != "lsof -nP -iTCP:18080 -sTCP:LISTEN" && !strings.Contains(top.NextStep.Command, "18080") {
+		t.Fatalf("top: %+v", top)
+	}
+}
+
+// A Rust service that was serving and then panicked is a high-confidence
+// "crash after a healthy start", with the panic as the cause. Without the Rust
+// patterns the panic line is plain output and the cause isn't visible.
+func TestRustPanicAfterHealthyStartEndToEnd(t *testing.T) {
+	_, fake := buildBins(t)
+	home, project := t.TempDir(), t.TempDir()
+	project, _ = filepath.EvalSymlinks(project)
+	port := freePort(t)
+	code, out, errs := kestrelCmd(t, home, project, "run", "--quiet", "--name", "api", "--",
+		fake, "--name", "api", "--listen", fmt.Sprintf("127.0.0.1:%d", port),
+		"--exit-after", "1500ms", "--exit-code", "101", "--exit-message", "thread 'main' panicked at src/main.rs:12:5:")
+	if code != 1 {
+		t.Fatalf("run exit %d\n%s%s", code, out, errs)
+	}
+	_, out, _ = kestrelCmd(t, home, project, "diagnose", "--format", "json")
+	rep := decode[api.DiagnosisReport](t, out)
+	if len(rep.Incidents) != 1 {
+		t.Fatalf("incidents: %s", out)
+	}
+	top := rep.Incidents[0].Hypotheses[0]
+	if top.RuleID != "K003-crash-after-start" || top.Confidence.Level != api.ConfidenceHigh || !strings.Contains(top.Explanation, "panicked at src/main.rs:12:5") {
 		t.Fatalf("top: %+v", top)
 	}
 }
