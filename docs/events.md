@@ -71,8 +71,19 @@ Every drop is counted on a `collector_overload` event placed in the stream where
 
 Patterns are data in [`internal/events/patterns.go`](../internal/events/patterns.go). Each has an ID, a type, a
 severity, a regex with named groups (`port*`, `target*`) that become attributes, and lines it must and must not
-match. Tests enforce both, and also check that no example is claimed by an earlier pattern. To add a pattern,
-add an entry with its evidence. IDs are stable because diagnosis rules will reference them.
+match. Tests enforce both, and also check that no example is claimed by an earlier pattern. IDs are stable
+because diagnosis rules reference them.
+
+**Adding a pattern.** Call `events.MustRegister(events.Pattern{…})` from an `init()` (the built-ins do the same).
+`Register` checks the pattern's own evidence: an ID like `P015-short-name`, a description, a type and severity, named
+groups limited to `port*` and `target*`, and that every `Match` line matches and no `NoMatch` line does. A
+pattern that fails the check can't be registered, so the program (and its tests) won't start.
+
+**Order.** The first match wins, so patterns are sorted by `Priority` (lower first). The built-ins are spaced 100
+apart (100, 200, …), so a new pattern can slot between two of them by choosing a priority in between. A pattern with
+no priority runs after all of them. Patterns with equal priority keep registration order, which follows file names
+within the package, so give a distinct priority when order matters. The test suite also fails if an earlier
+pattern claims one of your `Match` examples.
 
 | ID | Type | Recognizes |
 |---|---|---|
