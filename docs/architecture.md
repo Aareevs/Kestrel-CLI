@@ -55,6 +55,16 @@ Every package in the build spec's package map now exists.
    (`registerAnalyzer`, in `internal/discovery/registry.go`) and run in a fixed order. That reader resolves symlinks and refuses anything outside
    the root, files over 1 MiB, and non-regular files.
 
+**Workspaces.** Between the two stages, discovery reads monorepo declarations: `pnpm-workspace.yaml`, the
+`workspaces` field of `package.json` (npm, yarn, Bun), `go.work`, and Cargo's `[workspace]`. Member patterns
+(literals, `*`, `?`, `[...]`, `**`, `!` exclusions) are expanded against the real directories under the scanner's
+usual rules: symlinks are never followed, vendored and build directories are never matched by a glob, `.gitignore`
+applies, patterns can't leave the project, and the work is bounded (2000 directories, depth 8). Members deeper than
+the walk's depth limit are read too, each counted from itself. A root script that only runs its members
+(`turbo run dev`, `nx`, `lerna`, `pnpm -r`, `concurrently`, …) is not listed as a service of its own, but only when
+at least one member is a service. The result lists each workspace with its members, which are services, and any
+orchestrating root script. A declared member that doesn't exist is a warning.
+
 A post-pass then reconciles the results:
 
 - **Compose merge.** A compose service whose `build` context is a directory with exactly one native candidate

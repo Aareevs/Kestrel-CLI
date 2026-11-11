@@ -1,0 +1,4 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "services/billing/team/deep"

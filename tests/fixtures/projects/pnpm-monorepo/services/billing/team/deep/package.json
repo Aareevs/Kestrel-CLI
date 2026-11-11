@@ -1,0 +1,5 @@
+{
+  "name": "@acme/billing",
+  "scripts": { "start": "node server.js --port 4100" },
+  "dependencies": { "express": "^4.19.0" }
+}

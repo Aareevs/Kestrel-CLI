@@ -1,0 +1,7 @@
+go 1.22
+
+use (
+	./services/api
+	./libs/shared
+	./deep/a/b/worker
+)

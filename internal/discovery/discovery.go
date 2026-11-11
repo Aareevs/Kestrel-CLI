@@ -73,6 +73,7 @@ type scanner struct {
 	opts     Options
 	root     string              // absolute, symlinks resolved
 	files    map[string][]string // dir (slash-rel, "." for root) → file names
+	dirSeen  map[string]bool     // directories already counted
 	ignores  map[string]*gitignore
 	stats    api.ScanStats
 	warnings []string
@@ -80,6 +81,10 @@ type scanner struct {
 	// extraTech records technologies seen without a runnable candidate
 	// (e.g. a library-only go.mod).
 	extraTech []string
+	// workspaces are the declared monorepo workspaces with their members.
+	workspaces []workspace
+	// workspaceReport is what analyze() found about them, for the result.
+	workspaceReport []api.Workspace
 }
 
 // Scan inspects the project at opts.Root.
@@ -104,6 +109,7 @@ func Scan(ctx context.Context, opts Options) (*api.InspectResult, error) {
 		opts:     opts,
 		root:     root,
 		files:    map[string][]string{},
+		dirSeen:  map[string]bool{},
 		ignores:  map[string]*gitignore{},
 		deadline: opts.Now().Add(opts.Budget),
 		stats:    api.ScanStats{MaxDepth: opts.MaxDepth, MaxFiles: opts.MaxFiles},
@@ -111,6 +117,7 @@ func Scan(ctx context.Context, opts Options) (*api.InspectResult, error) {
 	if err := s.walk(); err != nil {
 		return nil, err
 	}
+	s.discoverWorkspaces()
 
 	cands := s.analyze()
 	return &api.InspectResult{
@@ -118,6 +125,7 @@ func Scan(ctx context.Context, opts Options) (*api.InspectResult, error) {
 		Root:          root,
 		Technologies:  s.technologies(cands),
 		Candidates:    cands,
+		Workspaces:    s.workspaceReport,
 		Scan:          s.stats,
 		Warnings:      s.warnings,
 	}, nil
@@ -134,8 +142,20 @@ func (s *scanner) truncate(reason string) {
 	}
 }
 
-func (s *scanner) walk() error {
-	err := filepath.WalkDir(s.root, func(p string, d fs.DirEntry, err error) error {
+func (s *scanner) walk() error { return s.walkFrom(".") }
+
+// walkFrom walks the tree below startRel (slash-relative, "." for the root).
+// The start directory is always entered, and depth is counted from it, so a
+// workspace member deeper than MaxDepth is read like a project at the root.
+// It is safe to walk a directory twice: files and directories are only
+// counted and recorded once.
+func (s *scanner) walkFrom(startRel string) error {
+	start, offset := s.root, 0
+	if startRel != "." {
+		start = filepath.Join(s.root, filepath.FromSlash(startRel))
+		offset = strings.Count(startRel, "/") + 1
+	}
+	err := filepath.WalkDir(start, func(p string, d fs.DirEntry, err error) error {
 		if s.ctx.Err() != nil {
 			s.truncate("cancelled")
 			return filepath.SkipAll
@@ -161,16 +181,19 @@ func (s *scanner) walk() error {
 		}
 
 		if d.IsDir() {
-			if rel != "." {
+			if rel != startRel {
 				if skipDirs[d.Name()] || s.ignored(rel, true) {
 					return filepath.SkipDir
 				}
-				if strings.Count(rel, "/")+1 > s.opts.MaxDepth {
+				if strings.Count(rel, "/")+1-offset > s.opts.MaxDepth {
 					return filepath.SkipDir
 				}
 			}
-			s.stats.DirsSeen++
-			s.loadGitignore(rel)
+			if !s.dirSeen[rel] {
+				s.dirSeen[rel] = true
+				s.stats.DirsSeen++
+				s.loadGitignore(rel)
+			}
 			return nil
 		}
 
@@ -186,12 +209,17 @@ func (s *scanner) walk() error {
 		} else if !d.Type().IsRegular() {
 			return nil
 		}
+		dir := path.Dir(rel)
+		for _, n := range s.files[dir] {
+			if n == d.Name() {
+				return nil // already recorded by an earlier walk
+			}
+		}
 		if s.stats.FilesSeen >= s.opts.MaxFiles {
 			s.truncate(fmt.Sprintf("file limit of %d reached", s.opts.MaxFiles))
 			return filepath.SkipAll
 		}
 		s.stats.FilesSeen++
-		dir := path.Dir(rel)
 		s.files[dir] = append(s.files[dir], d.Name())
 		return nil
 	})

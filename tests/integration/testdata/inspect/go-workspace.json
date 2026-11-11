@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "root": "<root>",
+  "technologies": [
+    "go"
+  ],
+  "candidates": [
+    {
+      "name": "queue",
+      "dir": "./deep/a/b/worker",
+      "technology": "go",
+      "command": {
+        "value": "go run ./cmd/queue",
+        "confidence": "high",
+        "source": {
+          "file": "deep/a/b/worker/cmd/queue/main.go",
+          "line": 1,
+          "note": "package main"
+        }
+      },
+      "sources": [
+        {
+          "file": "deep/a/b/worker/go.mod"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "name": "api",
+      "dir": "./services/api",
+      "technology": "go",
+      "framework": "gin",
+      "command": {
+        "value": "go run .",
+        "confidence": "high",
+        "source": {
+          "file": "services/api/main.go",
+          "line": 1,
+          "note": "package main"
+        }
+      },
+      "port": {
+        "value": 8081,
+        "confidence": "medium",
+        "source": {
+          "file": "services/api/main.go",
+          "line": 7,
+          "note": "listen address in code"
+        }
+      },
+      "health": {
+        "type": "http",
+        "target": "http://localhost:8081/",
+        "confidence": "medium",
+        "reason": "no health endpoint detected; probes the root path"
+      },
+      "sources": [
+        {
+          "file": "services/api/go.mod"
+        }
+      ],
+      "confidence": "high"
+    }
+  ],
+  "workspaces": [
+    {
+      "kind": "go",
+      "root": ".",
+      "file": "go.work",
+      "members": [
+        "deep/a/b/worker",
+        "libs/shared",
+        "services/api"
+      ],
+      "services": [
+        "deep/a/b/worker",
+        "services/api"
+      ]
+    }
+  ],
+  "scan": {
+    "files_seen": 7,
+    "dirs_seen": 11,
+    "max_depth": 3,
+    "max_files": 5000,
+    "truncated": false
+  }
+}

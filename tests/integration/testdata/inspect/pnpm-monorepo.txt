@@ -1,0 +1,26 @@
+Project  <root>
+Stack    node
+Workspace pnpm workspace · 4 members, 3 services  pnpm-workspace.yaml
+           not services: packages/ui
+           the root script only runs the members (pnpm dev: turbo run dev), so it isn't listed as a service
+
+Service candidates (3)
+
+  api  node (express) · ./apps/api                       high
+    command  pnpm dev                                    apps/api/package.json:3
+    port     4000 (high)                                 apps/api/package.json:3 · port flag in "dev" script
+    health   http http://localhost:4000/                 no health endpoint detected; probes the root path
+    needs    postgres? (inferred, not detected as a service)  apps/api/package.json:4 · uses pg
+
+  web  node (next) · ./apps/web                          high
+    command  pnpm dev                                    apps/web/package.json:3
+    port     3000 (medium)                               apps/web/package.json:4 · next default port
+    health   http http://localhost:3000/                 no health endpoint detected; probes the root path
+
+  billing  node (express) · ./services/billing/team/deep  high
+    command  pnpm start                                  services/billing/team/deep/package.json:3
+    port     4100 (high)                                 services/billing/team/deep/package.json:3 · port flag in "start" script
+    health   http http://localhost:4100/                 no health endpoint detected; probes the root path
+
+Scanned 7 files in 10 directories (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates

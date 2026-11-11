@@ -1,0 +1,5 @@
+{
+  "name": "@acme/api",
+  "scripts": { "dev": "tsx watch src/index.ts --port 4000" },
+  "dependencies": { "express": "^4.19.0", "pg": "^8.11.0" }
+}

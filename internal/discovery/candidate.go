@@ -31,6 +31,9 @@ type candidate struct {
 	healthPath     string
 	healthPathFrom api.Source
 	needs          []need // dependency hints resolved in the post-pass
+	// script is the body of the package script behind a Node command, which
+	// workspace discovery inspects to tell an orchestrating root script apart.
+	script string
 }
 
 // need is a dependency hint: either an infrastructure kind or a localhost port.
