@@ -1,0 +1,17 @@
+Project  <root>
+Stack    go
+Workspace go workspace · 3 members, 2 services  go.work
+           not services: libs/shared
+
+Service candidates (2)
+
+  queue  go · ./deep/a/b/worker                          medium
+    command  go run ./cmd/queue                          deep/a/b/worker/cmd/queue/main.go:1
+
+  api  go (gin) · ./services/api                         high
+    command  go run .                                    services/api/main.go:1
+    port     8081 (medium)                               services/api/main.go:7 · listen address in code
+    health   http http://localhost:8081/                 no health endpoint detected; probes the root path
+
+Scanned 7 files in 11 directories (depth ≤ 3). Nothing was executed.
+Next: kestrel init   # propose a kestrel.yaml from these candidates
