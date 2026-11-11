@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,7 +30,7 @@ func TestHelpIsGroupedOrderedAndPlainWhenPiped(t *testing.T) {
 		pos += i + len(want)
 	}
 	// Aliases are shown next to their command, and global flags are listed.
-	for _, want := range []string{"diagnose (diag)", "watch (w, start)", "--no-color", "Use \"kestrel [command] --help\""} {
+	for _, want := range []string{"diagnose (diag, why)", "watch (w, start)", "--no-color", "Use \"kestrel [command] --help\""} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("help lacks %q", want)
 		}
@@ -64,9 +65,9 @@ func TestGroupCommandsRejectUnknownSubcommands(t *testing.T) {
 			t.Errorf("%v: no suggestion %q:\n%s", tc.args, tc.suggest, r.stderr)
 		}
 	}
-	// With no subcommand they still show their help.
-	if r := run(t, t.TempDir(), nil, "sessions"); r.code != 0 || !strings.Contains(r.stdout, "list") || !strings.Contains(r.stdout, "delete") {
-		t.Fatalf("`kestrel sessions` should show its subcommands: exit %d\n%s", r.code, r.stdout)
+	// `config` with no subcommand shows its help; `sessions` lists (see TestBareSessionsLists).
+	if r := run(t, t.TempDir(), nil, "config"); r.code != 0 || !strings.Contains(r.stdout, "validate") || !strings.Contains(r.stdout, "show") {
+		t.Fatalf("`kestrel config` should show its subcommands: exit %d\n%s", r.code, r.stdout)
 	}
 }
 
@@ -124,5 +125,132 @@ func TestVerifyCommandsRunWithoutWaitingForAnEmptyWindow(t *testing.T) {
 	r := run(t, project, nil, "verify", "--allow-exec", "--window", "20s", "--interval", "5s")
 	if took := time.Since(start); r.code != 0 || took > 8*time.Second || !strings.Contains(r.stdout, "passed") {
 		t.Fatalf("exit %d after %v\n%s%s", r.code, took, r.stdout, r.stderr)
+	}
+}
+
+// twoIncidents records one session with two separate failures, far enough apart
+// (with a 500ms correlation window) to be two incidents.
+func twoIncidents(t *testing.T) (home, project string) {
+	t.Helper()
+	_, fake := buildBins(t)
+	home, project = t.TempDir(), t.TempDir()
+	project, _ = filepath.EvalSymlinks(project)
+	os.WriteFile(filepath.Join(project, "kestrel.yaml"), []byte("version: 1\ncorrelation:\n  window: 500ms\n"), 0o644)
+	code, out, errs := kestrelCmd(t, home, project, "run", "--quiet",
+		"--svc", "first="+fake+` --name first --exit-after 300ms --exit-code 1 --exit-message "fatal: the first failure"`,
+		"--svc", "second="+fake+` --name second --exit-after 2500ms --exit-code 1 --exit-message "fatal: the second failure"`)
+	if code != 1 {
+		t.Fatalf("run exit %d\n%s%s", code, out, errs)
+	}
+	return home, project
+}
+
+func TestIncidentFilter(t *testing.T) {
+	home, project := twoIncidents(t)
+	numbers := func(args ...string) (int, []int) {
+		code, out, errs := kestrelCmd(t, home, project, append(args, "--format", "json")...)
+		if code != 0 && code != 1 && code != 3 { // timeline exits 0; diagnose 1 or 3
+			t.Fatalf("%v: exit %d\n%s", args, code, errs)
+		}
+		var rep struct {
+			Incidents []struct {
+				Number   int `json:"number"`
+				Incident struct {
+					Number int `json:"number"`
+				} `json:"incident"`
+			} `json:"incidents"`
+		}
+		decode0 := func(v any) {
+			if err := json.Unmarshal([]byte(out), v); err != nil {
+				t.Fatalf("%v: %v\n%s", args, err, out)
+			}
+		}
+		decode0(&rep)
+		var ns []int
+		for _, in := range rep.Incidents {
+			n := in.Number
+			if in.Incident.Number != 0 {
+				n = in.Incident.Number
+			}
+			ns = append(ns, n)
+		}
+		return code, ns
+	}
+	if _, ns := numbers("diagnose"); len(ns) != 2 || ns[0] != 1 || ns[1] != 2 {
+		t.Fatalf("diagnose without a filter: incidents %v, want [1 2]", ns)
+	}
+	for _, tc := range []struct {
+		args []string
+		want []int
+	}{
+		{[]string{"diagnose", "-I", "2"}, []int{2}},
+		{[]string{"diagnose", "--incident", "1"}, []int{1}},
+		{[]string{"why", "-I", "2"}, []int{2}}, // the alias
+		{[]string{"timeline", "-I", "2"}, []int{2}},
+		{[]string{"timeline", "--incident", "1"}, []int{1}},
+	} {
+		if _, ns := numbers(tc.args...); len(ns) != 1 || ns[0] != tc.want[0] {
+			t.Errorf("%v: incidents %v, want %v", tc.args, ns, tc.want)
+		}
+	}
+	// The text view shows only the chosen incident.
+	code, out, _ := kestrelCmd(t, home, project, "diagnose", "-I", "2", "--no-color")
+	if code != 1 || !strings.Contains(out, "Incident #2") || strings.Contains(out, "Incident #1") || !strings.Contains(out, "the second failure") || strings.Contains(out, "the first failure") {
+		t.Fatalf("diagnose -I 2:\n%s", out)
+	}
+	// An incident that doesn't exist is a usage error that says what to do.
+	for _, args := range [][]string{{"diagnose", "-I", "9"}, {"timeline", "-I", "9"}} {
+		code, _, errs := kestrelCmd(t, home, project, args...)
+		if code != 2 || !strings.Contains(errs, "no incident #9 in this session (it has 2)") || !strings.Contains(errs, "next: kestrel timeline") {
+			t.Errorf("%v: exit %d\n%s", args, code, errs)
+		}
+	}
+}
+
+func TestShortFlagsAndAliases(t *testing.T) {
+	home, project := twoIncidents(t)
+	// why is diagnose.
+	_, a, _ := kestrelCmd(t, home, project, "diagnose", "--no-color")
+	_, b, _ := kestrelCmd(t, home, project, "why", "--no-color")
+	if a != b || a == "" {
+		t.Fatalf("`why` and `diagnose` differ:\n%s\n---\n%s", a, b)
+	}
+	// -a is --all, and -s is --service.
+	if code, out, errs := kestrelCmd(t, home, project, "diagnose", "-a", "--format", "json"); code != 1 || !strings.Contains(out, `"incidents"`) {
+		t.Fatalf("diagnose -a: exit %d\n%s%s", code, out, errs)
+	}
+	_, long, _ := kestrelCmd(t, home, project, "timeline", "--service", "second", "--no-color")
+	_, short, _ := kestrelCmd(t, home, project, "timeline", "-s", "second", "--no-color")
+	if long != short || !strings.Contains(long, "the second failure") {
+		t.Fatalf("timeline -s:\n%s\n---\n%s", long, short)
+	}
+	// The short flags are in the help.
+	for cmd, want := range map[string]string{"diagnose": "-I, --incident", "timeline": "-s, --service", "verify": "-w, --window", "run": "-n, --name"} {
+		if h := run(t, t.TempDir(), nil, cmd, "--help").stdout; !strings.Contains(h, want) {
+			t.Errorf("`%s --help` lacks %q", cmd, want)
+		}
+	}
+	if h := run(t, t.TempDir(), nil, "diagnose", "--help").stdout; !strings.Contains(h, "-a, --all") || !strings.Contains(h, "diagnose, diag, why") {
+		t.Errorf("diagnose help:\n%s", h)
+	}
+	// run -n names the service, and -s adds one.
+	_, fake := buildBins(t)
+	code, out, errs := kestrelCmd(t, home, project, "run", "--quiet", "-n", "solo", "--format", "json", "--", fake, "--name", "solo", "--exit-after", "100ms")
+	if code != 0 || !strings.Contains(out, `"service":"solo"`) {
+		t.Fatalf("run -n: exit %d\n%s%s", code, out, errs)
+	}
+}
+
+func TestBareSessionsLists(t *testing.T) {
+	home, project := twoIncidents(t)
+	_, list, _ := kestrelCmd(t, home, project, "sessions", "list", "--no-color")
+	code, bare, errs := kestrelCmd(t, home, project, "sessions", "--no-color")
+	if code != 0 || bare != list || !strings.Contains(bare, "run") {
+		t.Fatalf("`kestrel sessions` should be `kestrel sessions list`: exit %d\n%s\n--- vs ---\n%s%s", code, bare, list, errs)
+	}
+	// With nothing recorded it is a friendly empty list, not an error or help.
+	empty := t.TempDir()
+	if code, out, errs := kestrelCmd(t, t.TempDir(), empty, "sessions", "--no-color"); code != 0 || errs != "" || strings.Contains(out, "Usage") {
+		t.Fatalf("empty sessions: exit %d\n%s%s", code, out, errs)
 	}
 }

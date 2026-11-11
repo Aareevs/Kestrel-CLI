@@ -103,17 +103,31 @@ func liveNote(sum api.SessionSummary) string {
 // Diagnose correlates a recorded session into incidents and proposes ranked,
 // evidence-backed hypotheses for each.
 func (a *App) Diagnose(ctx context.Context, ref string, all bool) (*api.DiagnosisReport, error) {
+	return a.DiagnoseIncident(ctx, ref, all, 0)
+}
+
+// DiagnoseIncident is Diagnose narrowed to one incident (1-based, as numbered in
+// the report); 0 means every incident.
+func (a *App) DiagnoseIncident(ctx context.Context, ref string, all bool, incident int) (*api.DiagnosisReport, error) {
 	an, err := a.analyze(ctx, ref, all)
 	if err != nil {
 		return nil, err
 	}
 	defer an.store.Close()
+	if incident > 0 {
+		if _, _, err := pickIncident(an.incidents, incident); err != nil {
+			return nil, err
+		}
+	}
 	rep := &api.DiagnosisReport{SchemaVersion: api.SchemaVersion, Session: an.summary, Graph: an.graph.Edges(),
 		Incidents: []api.IncidentDiagnosis{}, Note: liveNote(an.summary)}
 	if rep.Graph == nil {
 		rep.Graph = []api.GraphEdge{}
 	}
 	for _, in := range an.incidents {
+		if incident > 0 && in.Number != incident {
+			continue
+		}
 		tail, err := an.tails(ctx, in)
 		if err != nil {
 			return nil, err
@@ -130,6 +144,8 @@ type TimelineOptions struct {
 	Since time.Duration
 	// Limit bounds the per-service event list (default 200).
 	Limit int
+	// Incident narrows the incidents to one (1-based); 0 means all.
+	Incident int
 }
 
 // Timeline returns the incident timelines of a session, or with Service set,
@@ -140,6 +156,11 @@ func (a *App) Timeline(ctx context.Context, ref string, all bool, o TimelineOpti
 		return nil, err
 	}
 	defer an.store.Close()
+	if o.Incident > 0 {
+		if _, _, err := pickIncident(an.incidents, o.Incident); err != nil {
+			return nil, err
+		}
+	}
 	rep := &api.TimelineReport{SchemaVersion: api.SchemaVersion, Session: an.summary, Graph: an.graph.Edges(),
 		Incidents: []api.Incident{}, Service: o.Service}
 	if rep.Graph == nil {
@@ -180,6 +201,9 @@ func (a *App) Timeline(ctx context.Context, ref string, all bool, o TimelineOpti
 		return nil, err
 	}
 	for _, in := range an.incidents {
+		if o.Incident > 0 && in.Number != o.Incident {
+			continue
+		}
 		if !cutoff.IsZero() && in.End.Before(cutoff) {
 			continue
 		}
