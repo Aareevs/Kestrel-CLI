@@ -55,6 +55,13 @@ copies are counted and reported as one event with `attrs.repeats` and `attrs.dur
 is flushed when a different line arrives, when the stream goes quiet for 1s, or after 10s. Text output shows it
 as `↻ ×13 more over 1.4s: <the line>`. Each stream folds separately, so the summary names its line.
 
+## Docker Compose output
+
+`docker compose up` prefixes every line of a container's output with its name: `api-1  | panic: …` (Compose v2),
+`api_1  | …` (v1). So that patterns anchored to the start of a line (`panic:`, `Traceback`, `Uncaught`) still
+recognize a container's own output, the prefix is ignored **for classification only**. The stored message keeps the
+line exactly as printed, so you can still tell which container said it.
+
 ## Backpressure
 
 The collector buffer is bounded at 10,000 events and about 8 MiB. When it's full:
@@ -100,7 +107,7 @@ pattern claims one of your `Match` examples.
 | `P006-connection-refused` | `dependency_conn_failed` | Go `dial tcp …: connection refused`, Node `ECONNREFUSED`, Ruby `Connection refused - connect(2) for … port N`, dev-server proxy errors |
 | `P007-host-not-found` | `dependency_conn_failed` | `ENOTFOUND`, `no such host`, "Name or service not known", "could not translate host name" |
 | `P008-connection-timeout` | `dependency_conn_failed` | `i/o timeout`, `ETIMEDOUT` |
-| `P012-out-of-memory` | `log_line` (fatal) | V8 heap OOM, Go runtime OOM, Python `MemoryError`, Java `OutOfMemoryError`, PHP "Allowed memory size … exhausted" |
+| `P012-out-of-memory` | `log_line` (fatal) | V8 heap OOM, Go runtime OOM, Python `MemoryError`, Java `OutOfMemoryError`, PHP "Allowed memory size … exhausted", Docker `OOMKilled`, the Linux OOM killer |
 | `P009-go-panic` | `log_line` (fatal) | `panic:` / `fatal error:` at line start |
 | `P010-node-uncaught` | `log_line` (fatal) | uncaught exceptions, unhandled promise rejections |
 | `P011-python-traceback` | `log_line` (error) | `Traceback (most recent call last):` |
@@ -124,6 +131,14 @@ pattern claims one of your `Match` examples.
 | `P028-ruby-uncaught` | `log_line` (fatal) | `app.rb:3:in …: message (ErrorClass)`: a Ruby program died |
 | `P033-php-db-unavailable` | `dependency_conn_failed` | PDO/Laravel `SQLSTATE[…] [2002/1045/1049/2006]`, "could not find driver" |
 | `P032-php-fatal` | `log_line` (fatal) | `PHP Fatal error:` and `PHP Parse error:` |
+| `P034-docker-daemon-unavailable` | `dependency_conn_failed` | "Cannot connect to the Docker daemon", Docker socket permission denied, Windows `docker_engine` pipe errors |
+| `P035-docker-port-allocated` | `port_bind_failed` | "Bind for 0.0.0.0:5432 failed: port is already allocated" (with the port) |
+| `P036-docker-image-pull-failed` | `log_line` (error) | `pull access denied`, "manifest … not found", `toomanyrequests`, registry `unauthorized` |
+| `P037-docker-build-failed` | `log_line` (error) | `ERROR [build 3/5] …`, `failed to solve:`, "returned a non-zero code" |
+| `P038-compose-config-invalid` | `log_line` (error) | no Compose file, undefined network/volume/service, YAML errors, unknown properties |
+| `P039-docker-name-conflict` | `log_line` (error) | "The container name … is already in use" |
+| `P040-compose-dependency-failed` | `log_line` (error) | "dependency failed to start: container db-1 is unhealthy / exited" |
+| `P041-container-exited` | `log_line` (error) | `api-1 exited with code 137`: any failure code, but not `0` or `143` (a normal stop) |
 | `L001-listening` | `log_line` (info) | announced listen addresses (`Listening on :8080`, Vite `Local:`, Uvicorn, Django, Flask, Next.js, Spring's `Tomcat started on port(s): 8080`, Ktor's `Responding at …`, Rocket's `has launched from`, PHP's built-in server). Used by `run` to auto-probe the port |
 
 The table is in match order: `P012` is checked before `P009` so `fatal error: runtime: out of memory` counts as
