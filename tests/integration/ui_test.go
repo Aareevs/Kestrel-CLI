@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Aareevs/Kestrel-CLI/internal/cli"
 )
 
 var ansiCodes = regexp.MustCompile(`\x1b\[`)
@@ -252,5 +255,62 @@ func TestBareSessionsLists(t *testing.T) {
 	empty := t.TempDir()
 	if code, out, errs := kestrelCmd(t, t.TempDir(), empty, "sessions", "--no-color"); code != 0 || errs != "" || strings.Contains(out, "Usage") {
 		t.Fatalf("empty sessions: exit %d\n%s%s", code, out, errs)
+	}
+}
+
+// pickRun runs kestrel in process with keystrokes on stdin. tty says whether
+// stdin and stdout look like a terminal.
+func pickRun(t *testing.T, home, project, keys string, tty bool, args ...string) (int, string, string) {
+	t.Helper()
+	t.Setenv("KESTREL_HOME", home)
+	var out, errb bytes.Buffer
+	s := cli.Streams{In: strings.NewReader(keys), Out: &out, Err: &errb, InIsTTY: tty, OutIsTTY: tty,
+		MakeRaw: func() (func(), error) { return func() {}, nil },
+		Getenv:  func(string) string { return "" },
+		Getwd:   func() (string, error) { return project, nil }}
+	code := cli.Execute(t.Context(), s, args)
+	return code, out.String(), errb.String()
+}
+
+func TestInteractivePicker(t *testing.T) {
+	home, project := twoIncidents(t)
+
+	// Session picker, then incident picker: enter, then 2 (the first incident).
+	code, out, errs := pickRun(t, home, project, "\r2\r", true, "diagnose", "-i", "--no-color")
+	if code != 1 || !strings.Contains(out, "the first failure") || strings.Contains(out, "the second failure") {
+		t.Fatalf("picking incident 1: exit %d\n%s%s", code, out, errs)
+	}
+	// "All" (the first row) keeps every incident.
+	code, out, _ = pickRun(t, home, project, "\r\r", true, "diagnose", "-i", "--no-color")
+	if code != 1 || !strings.Contains(out, "the first failure") || !strings.Contains(out, "the second failure") {
+		t.Fatalf("picking All: exit %d\n%s", code, out)
+	}
+	// The picker leaves the terminal as it found it: every hidden cursor is shown again.
+	if strings.Count(out, "\x1b[?25l") != 2 || strings.Count(out, "\x1b[?25h") != 2 {
+		t.Errorf("cursor hidden/shown mismatch: %q", out)
+	}
+	// -I on the command line skips the incident picker; keys are the session choice only.
+	code, out, _ = pickRun(t, home, project, "\r", true, "diagnose", "-i", "-I", "2", "--no-color")
+	if code != 1 || !strings.Contains(out, "the second failure") || strings.Contains(out, "the first failure") {
+		t.Fatalf("-i -I 2: exit %d\n%s", code, out)
+	}
+	// Cancelling exits quietly with 130 and prints no report.
+	for _, keys := range []string{"q", "\x1b", "\r" + "q", ""} {
+		code, out, errs = pickRun(t, home, project, keys, true, "diagnose", "-i", "--no-color")
+		if code != 130 || strings.Contains(out, "failure") || strings.Contains(errs, "Error") {
+			t.Errorf("cancel with %q: exit %d\n%s%s", keys, code, out, errs)
+		}
+	}
+	// sessions show and timeline take -i too.
+	if code, out, errs = pickRun(t, home, project, "\r", true, "sessions", "show", "-i", "--no-color"); code != 0 || !strings.Contains(out, "first") {
+		t.Errorf("sessions show -i: exit %d\n%s%s", code, out, errs)
+	}
+	if code, out, errs = pickRun(t, home, project, "\r3\r", true, "timeline", "-i", "--no-color"); code != 0 || !strings.Contains(out, "the second failure") {
+		t.Errorf("timeline -i: exit %d\n%s%s", code, out, errs)
+	}
+	// Without a terminal there is no picker: say so, and use the latest session.
+	code, out, errs = pickRun(t, home, project, "\r\r", false, "diagnose", "-i", "--no-color")
+	if code != 1 || !strings.Contains(errs, "not a terminal") || !strings.Contains(out, "the second failure") || strings.Contains(out, "\x1b[?25l") {
+		t.Fatalf("non-TTY -i: exit %d\n%s%s", code, out, errs)
 	}
 }
