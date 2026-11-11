@@ -23,12 +23,21 @@ import (
 )
 
 // UsageError marks problems with the user's request or config (exit code 2).
-type UsageError struct{ Err error }
+// Next, when set, is a concrete step to try, shown under the error.
+type UsageError struct {
+	Err  error
+	Next string
+}
 
 func (e *UsageError) Error() string { return e.Err.Error() }
 func (e *UsageError) Unwrap() error { return e.Err }
 
 func usage(format string, a ...any) error { return &UsageError{Err: fmt.Errorf(format, a...)} }
+
+// usageNext is usage with a next step.
+func usageNext(next, format string, a ...any) error {
+	return &UsageError{Err: fmt.Errorf(format, a...), Next: next}
+}
 
 // NamedCommand is a service given on the command line (run --svc name=cmd).
 type NamedCommand struct {
@@ -84,7 +93,8 @@ func (a *App) RunCommands(ctx context.Context, cwd string, argv []string, named 
 		})
 	}
 	if len(specs) == 0 {
-		return nil, usage("nothing to run: pass a command after --, or --svc name=\"command\"")
+		return nil, usageNext("kestrel run -- npm run dev    (any command works; no config needed)",
+			"nothing to run: pass a command after --, or --svc name=\"command\"")
 	}
 	seen := map[string]bool{}
 	for _, s := range specs {
@@ -105,7 +115,8 @@ func (a *App) RunCommands(ctx context.Context, cwd string, argv []string, named 
 func (a *App) Watch(ctx context.Context, names []string, o SuperviseOptions) (*Outcome, error) {
 	cfg, _, err := a.LoadConfig()
 	if errors.Is(err, ErrNoConfig) {
-		return nil, usage("%v; watch needs one (try 'kestrel init', or 'kestrel run -- <command>' without config)", err)
+		return nil, usageNext("kestrel init    writes one from what Kestrel finds (or: kestrel run -- <command>, which needs no config)",
+			"%v; watch needs one", err)
 	}
 	if err != nil {
 		return nil, &UsageError{Err: err}

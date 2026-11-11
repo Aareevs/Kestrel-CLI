@@ -131,7 +131,14 @@ func (a *App) resolve(ctx context.Context, st *storage.Store, ref string, all bo
 		if !all {
 			hint = " (searching this project's sessions; pass --all to search every project)"
 		}
-		return "", &UsageError{Err: fmt.Errorf("%v%s", err, hint)}
+		next := "kestrel sessions list    shows the sessions you can use"
+		switch {
+		case errors.As(err, &amb):
+			next = "use a longer prefix, or the full ID from: kestrel sessions list"
+		case strings.Contains(err.Error(), "none recorded yet"):
+			next = "kestrel run -- <command>    or: kestrel watch    records a session to look at"
+		}
+		return "", &UsageError{Err: fmt.Errorf("%v%s", err, hint), Next: next}
 	}
 	return id, err
 }

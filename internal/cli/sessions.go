@@ -38,6 +38,7 @@ func newSessionsCmd(g *globals) *cobra.Command {
 		Long: "Every 'kestrel run' and 'kestrel watch' is recorded locally. Sessions are referenced by full ID,\n" +
 			"a unique prefix, or 'last'. By default only this project's sessions are considered; use --all for every project.",
 	}
+	groupCommand(cmd)
 	cmd.PersistentFlags().BoolVar(&all, "all", false, "consider sessions from every project, not just this one")
 
 	list := &cobra.Command{
