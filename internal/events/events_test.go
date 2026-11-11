@@ -182,3 +182,40 @@ func TestPatternsDocumented(t *testing.T) {
 		}
 	}
 }
+
+// `docker compose up` prefixes each line with the container's name. Patterns
+// anchored to the start of a line must still recognize the container's output,
+// and the prefix is only skipped for classification.
+func TestComposePrefixIsIgnoredForClassification(t *testing.T) {
+	tests := []struct {
+		line, pattern string
+		sev           api.Severity
+		port          int
+	}{
+		{"api-1  | panic: runtime error: index out of range", "P009-go-panic", api.SeverityFatal, 0},
+		{"api-1           | Traceback (most recent call last):", "P011-python-traceback", api.SeverityError, 0},
+		{"api_1  | Traceback (most recent call last):", "P011-python-traceback", api.SeverityError, 0}, // Compose v1
+		{"web-1  | Error: listen EADDRINUSE: address already in use :::3000", "P001-port-in-use", api.SeverityError, 3000},
+		{"my.svc-2  | Uncaught TypeError: x is undefined", "P010-node-uncaught", api.SeverityFatal, 0},
+		{"worker-1  | [ERROR] retrying", "", api.SeverityError, 0}, // the level survives too
+	}
+	for _, tt := range tests {
+		c := Classify(tt.line)
+		if c.PatternID != tt.pattern || c.Severity != tt.sev || c.Port != tt.port {
+			t.Errorf("Classify(%q) = %+v", tt.line, c)
+		}
+	}
+	// Only a real compose prefix is skipped.
+	for _, line := range []string{"api | panic: x", "panic: x", "note-1 | not a prefix because of the text after? panic: x"} {
+		want := ""
+		if line == "panic: x" {
+			want = "P009-go-panic"
+		}
+		if got := Classify(line).PatternID; got != want {
+			t.Errorf("Classify(%q) = %q, want %q", line, got, want)
+		}
+	}
+	if got := stripComposePrefix("api-1  | hello | world"); got != "hello | world" {
+		t.Errorf("only the first separator is removed: %q", got)
+	}
+}
