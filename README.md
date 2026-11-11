@@ -89,6 +89,10 @@ kestrel verify    # or: kestrel v
 
 *(No configuration file? You can run any command immediately with `kestrel run -- <command>`, or generate a `kestrel.yaml` via `kestrel init`.)*
 
+### The welcome screen
+
+Type `kestrel` with nothing after it, in a terminal, and you get a short, static welcome: the logo, a live summary of the current project (stack, services found, whether there is a `kestrel.yaml`, how the last session went), and a few commands that fit where the project is (`kestrel init` when there is no config, `kestrel why` after a failed run, and so on). It only reads: it creates no files and runs nothing. Piped, or with `--json` / `--quiet`, bare `kestrel` prints the command list as before.
+
 ### Command & Flag Shortcuts
 
 | Quick Command | Full Command | Description |

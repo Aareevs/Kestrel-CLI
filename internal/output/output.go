@@ -3,6 +3,7 @@ package output
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 
@@ -56,6 +57,9 @@ func (s Style) Red(v string) string    { return s.wrap("31", v) }
 func (s Style) Green(v string) string  { return s.wrap("32", v) }
 func (s Style) Yellow(v string) string { return s.wrap("33", v) }
 func (s Style) Cyan(v string) string   { return s.wrap("36", v) }
+
+// Color256 colors v with one of the 256-color palette entries.
+func (s Style) Color256(n int, v string) string { return s.wrap(fmt.Sprintf("38;5;%d", n), v) }
 
 // WriteJSON writes v as indented JSON followed by a newline.
 func WriteJSON(w io.Writer, v any) error {
