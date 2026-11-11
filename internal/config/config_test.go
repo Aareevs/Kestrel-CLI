@@ -93,7 +93,7 @@ func TestParseErrors(t *testing.T) {
 		{"syntax", "version: 1\nservices: [\n", []string{"line 2: did not find expected node content"}},
 		{"missing version", "services: []\n", []string{"version: required"}},
 		{"bad version", "version: 2\n", []string{"line 1: version: unsupported version 2"}},
-		{"unknown top-level field", "version: 1\nservise: []\n", []string{`line 2: unknown field "servise" (valid here: correlation, project, redaction, services, storage, verify, version)`}},
+		{"unknown top-level field", "version: 1\nservise: []\n", []string{`line 2: unknown field "servise" (valid here: correlation, patterns, project, redaction, services, storage, verify, version)`}},
 		{"unknown service field", "version: 1\nservices:\n  - name: a\n    command: x\n    port: 80\n", []string{`line 5: unknown field "port"`}},
 		{"wrong type", "version: 1\nstorage:\n  retention_days: lots\n", []string{"line 3:", "cannot unmarshal"}},
 		{"bad duration", "version: 1\ncorrelation:\n  window: soon\n", []string{`line 3: invalid duration "soon"`}},
