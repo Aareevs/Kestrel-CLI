@@ -107,7 +107,56 @@ Kestrel never builds a command from log content. The only commands it runs are t
 
 Each verification of a recorded session is saved with that session (and removed with it). `kestrel timeline` lists
 them under **Verification**. `--format json` gives the full report, including every sample count and evidence ID.
-The report's schema is `VerificationReport` in [`pkg/api`](../pkg/api/verification.go).
+The report's schema is `VerificationReport` in [`pkg/api`](../pkg/api/verification.go), published as
+[`schemas/verify.schema.json`](schemas/verify.schema.json) (`kestrel schema verify`).
+
+## In CI
+
+`kestrel verify` is a plain command with an exit code, so it fits any CI system without a plugin. Two report
+formats make the result readable there:
+
+- `--format markdown` prints a summary (the verdict, a table of checks, why, and what was still occurring) for a
+  job summary or a PR comment.
+- `--format junit` prints JUnit XML: one test suite, a test case per check, so the CI's test report lists each
+  check. A check that failed, timed out or was unstable is a failure; one that did not run is **skipped**; and for
+  a live session there is one more case, "no new errors from the affected services during the window". The
+  verdict, claim, session and incident are suite properties.
+- `--markdown FILE` and `--junit FILE` write the same reports **to files in addition to** whatever `--format`
+  prints (so the console keeps the readable text report). They overwrite the file, through a temporary file, and
+  the directory must exist. They are written even when the verdict fails, which is when you want them.
+
+The exit code is the same in every format: `0` resolved, `1` still failing or partially resolved, `3`
+inconclusive. Progress lines go to stderr, so stdout is only the report.
+
+```yaml
+# GitHub Actions: a step in your own workflow (there is no Kestrel action)
+- name: Verify the stack
+  run: |
+    kestrel verify --allow-exec --window 30s --markdown summary.md --junit junit.xml || code=$?
+    if [ -f summary.md ]; then cat summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+    exit "${code:-0}"
+- uses: actions/upload-artifact@v4
+  if: always()
+  with: { name: kestrel-verify, path: junit.xml }
+```
+
+```yaml
+# GitLab CI
+verify:
+  script: kestrel verify --allow-exec --junit junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+```
+
+In a job there is no terminal to ask in, so a `command` check without `--allow-exec` is **not run** and the verdict
+is `inconclusive` (exit 3); the report shows it as skipped. Only pass `--allow-exec` for a `kestrel.yaml` you trust.
+
+What the programs under test printed (error lines, command output) appears in the reports as quoted text, never as
+markup: in Markdown it is in code spans (so a stray `<script>`, link or `@mention` stays inert, and a `|` can't
+split a table row), and in XML it is escaped, with characters XML can't carry removed. All of it was redacted
+before it was stored, and is redacted again when the report is made.
 
 ## Examples
 
@@ -117,4 +166,5 @@ kestrel verify --allow-exec          # also run verify.checks commands without a
 kestrel verify --window 2m --interval 5s
 kestrel verify 01J9 --incident 2     # a specific session and incident
 kestrel verify --format json         # full report for scripts; exit code carries the verdict
+kestrel verify --junit junit.xml --markdown summary.md   # reports for CI, next to the normal output
 ```

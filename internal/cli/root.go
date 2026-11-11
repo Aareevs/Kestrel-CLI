@@ -183,8 +183,13 @@ func newRoot(s Streams) (*cobra.Command, *globals) {
 			}
 			switch output.Format(g.format) {
 			case output.FormatText, output.FormatJSON:
+			case "markdown", "junit":
+				// Report formats for CI, which only `verify` has.
+				if cmd.Name() != "verify" {
+					return usageErr(fmt.Errorf("--format %s is only for `kestrel verify` (use text or json here)", g.format))
+				}
 			default:
-				return usageErr(fmt.Errorf("invalid --format %q (use text or json)", g.format))
+				return usageErr(fmt.Errorf("invalid --format %q (use text or json; verify also takes markdown or junit)", g.format))
 			}
 			if g.verbose && g.quiet {
 				return usageErr(errors.New("--verbose and --quiet cannot be used together"))

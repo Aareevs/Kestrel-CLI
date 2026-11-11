@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="kestrel verify" tests="8" failures="5" errors="0" skipped="2" time="31.000">
+  <testsuite name="kestrel verify" tests="8" failures="5" errors="0" skipped="2" time="31.000" timestamp="2026-11-12T10:00:00">
+    <properties>
+      <property name="verdict" value="partially_resolved"></property>
+      <property name="claim" value="observed"></property>
+      <property name="window" value="30s"></property>
+      <property name="interval" value="2s"></property>
+      <property name="live" value="true"></property>
+      <property name="session" value="01M76TESTSESSION"></property>
+      <property name="incident" value="2"></property>
+    </properties>
+    <testcase name="api probe http://127.0.0.1:8080/health" classname="kestrel.verify.probe" time="30.000"></testcase>
+    <testcase name="web probe http://127.0.0.1:5173/" classname="kestrel.verify.probe" time="30.000">
+      <failure message="failed 0/15" type="failed">status 503 | body: &lt;script&gt;alert(1)&lt;/script&gt; `ticks` [link](http://evil) @everyone</failure>
+    </testcase>
+    <testcase name="tcp 127.0.0.1:5432" classname="kestrel.verify.tcp" time="30.000">
+      <failure message="unstable 9/15" type="flaky">connection refused</failure>
+    </testcase>
+    <testcase name="command make test" classname="kestrel.verify.command" time="1.500">
+      <failure message="failed" type="failed">FAIL: TestX&#xA;bad  byte &amp; &lt;tag&gt;&#xA;``` escape attempt&#xA;# heading&#xA;@mention</failure>
+    </testcase>
+    <testcase name="command sleep 99" classname="kestrel.verify.command" time="2.000">
+      <failure message="timed out" type="timed_out"></failure>
+    </testcase>
+    <testcase name="command ./slow-check.sh" classname="kestrel.verify.command" time="0.000">
+      <skipped message="not authorized: pass --allow-exec to run it (no terminal to ask in)"></skipped>
+    </testcase>
+    <testcase name="&lt;img src=x onerror=alert(1)&gt; probe http://127.0.0.1:1/" classname="kestrel.verify.probe" time="30.000">
+      <skipped message="skipped: &lt;b&gt;bold&lt;/b&gt; | pipe"></skipped>
+    </testcase>
+    <testcase name="no new errors from the affected services during the window" classname="kestrel.verify.errors" time="30.000">
+      <failure message="7 new error event(s)" type="recurring">web: line one&#xA;line two | &lt;b&gt;bold&lt;/b&gt; ```fence``` &#xA;api: connection refused to 127.0.0.1:5432</failure>
+    </testcase>
+    <system-out>failing: web (probe http://127.0.0.1:5173/), command `make test`&#xA;the affected services logged 7 new error event(s) during the window</system-out>
+  </testsuite>
+</testsuites>

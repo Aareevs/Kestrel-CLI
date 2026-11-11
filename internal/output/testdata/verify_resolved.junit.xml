@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="kestrel verify" tests="4" failures="0" errors="0" skipped="0" time="31.000">
+  <testsuite name="kestrel verify" tests="4" failures="0" errors="0" skipped="0" time="31.000" timestamp="2026-11-12T10:00:00">
+    <properties>
+      <property name="verdict" value="resolved"></property>
+      <property name="claim" value="verified"></property>
+      <property name="window" value="30s"></property>
+      <property name="interval" value="2s"></property>
+      <property name="live" value="true"></property>
+      <property name="session" value="01M76TESTSESSION"></property>
+      <property name="incident" value="2"></property>
+    </properties>
+    <testcase name="api probe http://127.0.0.1:8080/health" classname="kestrel.verify.probe" time="30.000"></testcase>
+    <testcase name="tcp 127.0.0.1:5432" classname="kestrel.verify.tcp" time="30.000"></testcase>
+    <testcase name="command go test ./..." classname="kestrel.verify.command" time="4.200"></testcase>
+    <testcase name="no new errors from the affected services during the window" classname="kestrel.verify.errors" time="30.000"></testcase>
+    <system-out>passing on every sample: api (probe http://127.0.0.1:8080/health)&#xA;no new errors from the affected services during the window</system-out>
+  </testsuite>
+</testsuites>
