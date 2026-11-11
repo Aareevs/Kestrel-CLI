@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="kestrel verify" tests="1" failures="0" errors="0" skipped="1" time="31.000">
+  <testsuite name="kestrel verify" tests="1" failures="0" errors="0" skipped="1" time="31.000" timestamp="2026-11-12T10:00:00">
+    <properties>
+      <property name="verdict" value="inconclusive"></property>
+      <property name="claim" value="unresolved"></property>
+      <property name="window" value="30s"></property>
+      <property name="interval" value="2s"></property>
+      <property name="live" value="false"></property>
+    </properties>
+    <testcase name="verdict" classname="kestrel.verify" time="0.000">
+      <skipped message="inconclusive: no check could run: configure a health probe or verify.checks, or verify while &#39;kestrel watch&#39; is running"></skipped>
+    </testcase>
+    <system-out>no check could run: configure a health probe or verify.checks, or verify while &#39;kestrel watch&#39; is running</system-out>
+  </testsuite>
+</testsuites>

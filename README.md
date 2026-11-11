@@ -99,6 +99,10 @@ In a terminal, `kestrel watch` holds a small table of your services at the top o
 
 It is only used when output is a terminal with room for it (about 50 columns and the table plus 6 rows). Piped output, `--json`, `--quiet`, `TERM=dumb`, a small window, and Windows get the plain log stream, and `--plain` turns it off anywhere. `kestrel run` never pins a table.
 
+### Verify in CI
+
+`kestrel verify` exits `0` resolved, `1` failing, `3` inconclusive, so it works as a CI step as is. For a readable result there, `--format markdown` prints a job summary, `--format junit` prints JUnit XML, and `--markdown FILE` / `--junit FILE` write those files next to the normal output (even when the verdict fails). Output from your programs is quoted as text in both, never as markup. See [docs/verification.md](docs/verification.md#in-ci) for GitHub Actions and GitLab examples. (There is no Kestrel GitHub Action; the examples are ordinary steps.)
+
 ### JSON output and its schemas
 
 `kestrel diagnose`, `timeline` and `verify` print a stable report with `--json`. Each has a JSON Schema (draft 2020-12) in [`docs/schemas/`](docs/schemas), and `kestrel schema <diagnose|timeline|verify>` prints the same file from the installed binary, for validating the output in a script or CI, or generating types:
