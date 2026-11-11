@@ -1,4 +1,5 @@
 # Kestrel developer tasks. `make check` runs every quality gate.
+# `make schemas` regenerates docs/schemas; `make golden` regenerates golden files.
 
 PKG      := github.com/Aareevs/Kestrel-CLI
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
