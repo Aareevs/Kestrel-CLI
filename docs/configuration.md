@@ -42,6 +42,14 @@ verify:
   checks:
     - { type: probe, service: api }
     - { type: command, run: go test ./..., dir: ./backend, timeout: 120s }
+patterns:
+  - id: U001-shard-down
+    description: a database shard is unreachable
+    type: dependency_conn_failed
+    severity: error
+    regex: 'PRISMA: shard (?P<target>\S+) unreachable'
+    match: ["PRISMA: shard db-7:5432 unreachable"]
+    no_match: ["PRISMA: shard db-7:5432 healthy"]
 ```
 
 ## Fields
@@ -58,6 +66,7 @@ verify:
 | `redaction.extra_patterns` | list of regex | `[]` | Extra patterns to redact. Must compile. |
 | `services` | list | `[]` | See below. |
 | `verify.checks` | list | `[]` | See below. |
+| `patterns` | list | `[]` | Project-specific error shapes. See below. |
 
 Durations use Go syntax: `500ms`, `2s`, `1m30s`.
 
@@ -101,6 +110,31 @@ run yourself) is observed and never started.
 
 Probe checks are added to the ones verify picks by itself (the health probe of each affected service, and each
 address the incident's services failed to reach). See [verification.md](verification.md).
+
+### `patterns[]`
+
+Teach Kestrel an error shape that is specific to your project: an internal library's message, a vendor SDK's
+wording. Kestrel then classifies those lines like its own patterns (see [events](events.md)), so they count as
+anomalies, join incidents, and feed diagnosis.
+
+| Key | Notes |
+|---|---|
+| `id` | `U001-short-name`: `U`, three digits, lowercase words. Unique in the file. |
+| `description` | What the error means. |
+| `type` | `log_line`, `dependency_conn_failed`, `port_bind_failed`, or `test_failed`. |
+| `severity` | `debug`, `info`, `warn`, `error`, or `fatal`. A line that declares its own level (say `level=warn`) keeps it, except `fatal`, which always raises it. |
+| `regex` | A Go ([RE2](https://github.com/google/re2/wiki/Syntax)) regular expression, at most 1000 characters. Named groups `(?P<port>\d+)` and `(?P<target>\S+:\d+)` become the event's port and target. A `dependency_conn_failed` pattern with a `target` is how a service's failure to reach another service gets linked in the dependency graph. |
+| `match` | 1–20 lines the pattern must match. |
+| `no_match` | 1–20 similar lines it must **not** match. |
+
+Every pattern carries its own evidence, and `kestrel config validate` checks it: your regex must match every `match`
+line and none of the `no_match` lines, with errors on the line that is wrong.
+
+**Order.** Your patterns run **after** Kestrel's built-in ones, so they recognize what the built-ins don't and
+never take a line a built-in already claims (diagnosis rules depend on the built-in IDs). If one of your `match`
+examples is already recognized by a built-in, validation says which one, because your pattern would never run on
+it. Between your own patterns, the first in the file wins. There can be at most 50. They apply to `run` and
+`watch` in this project only. Sessions recorded earlier are not re-classified.
 
 ## Secrets
 
