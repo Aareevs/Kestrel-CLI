@@ -143,3 +143,59 @@ func validate(p Pattern) error {
 	}
 	return nil
 }
+
+// A Library is an immutable set of patterns to classify lines with. The
+// default library is every registered pattern. A project's library is that
+// plus the patterns in its kestrel.yaml, which apply to that project only.
+type Library struct{ set *patternSet }
+
+// DefaultLibrary is the registered patterns (what Classify uses).
+func DefaultLibrary() *Library { return &Library{set: load()} }
+
+// Classify assigns a type, severity and attributes to one log line.
+func (l *Library) Classify(line string) Classification {
+	if l == nil {
+		return Classify(line)
+	}
+	return classify(l.set, line)
+}
+
+// Patterns returns the library's patterns in match order (shared; read-only).
+func (l *Library) Patterns() []Pattern {
+	if l == nil {
+		return Patterns()
+	}
+	return l.set.list
+}
+
+// With returns a library with extra patterns added, or an error naming the
+// first problem. The receiver isn't changed.
+//
+// Extra patterns run after the library's existing ones, so they can recognize
+// shapes the built-ins don't, but never take a line a built-in already claims
+// (diagnosis rules depend on the built-in IDs). To keep that honest, With
+// rejects a pattern whose own Match examples are claimed by an earlier
+// pattern, since it would never run on them.
+func (l *Library) With(extra ...Pattern) (*Library, error) {
+	set := l.base()
+	for _, p := range extra {
+		next, err := withPattern(set, p)
+		if err != nil {
+			return nil, err
+		}
+		for _, line := range p.Match {
+			if got := classify(next, line).PatternID; got != p.ID {
+				return nil, fmt.Errorf("pattern %s: %q is already recognized by %s, so this pattern would never run on it (custom patterns match what the built-ins don't)", p.ID, line, got)
+			}
+		}
+		set = next
+	}
+	return &Library{set: set}, nil
+}
+
+func (l *Library) base() *patternSet {
+	if l == nil {
+		return load()
+	}
+	return l.set
+}

@@ -156,3 +156,62 @@ func TestClassifyWhileRegistering(t *testing.T) {
 		t.Fatalf("%d patterns registered, want %d (a registration was lost)", got, len(builtinPatterns)+writers*perWriter)
 	}
 }
+
+func TestLibraryWithAddsAfterBuiltinsAndStaysScoped(t *testing.T) {
+	p := sample("U001-boom", `boom (?P<target>\S+:\d+)`)
+	p.Match = []string{"boom db:5432"}
+	lib, err := DefaultLibrary().With(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := lib.Classify("boom db:5432"); c.PatternID != "U001-boom" || c.Target != "db:5432" || c.Port != 5432 {
+		t.Fatalf("custom pattern: %+v", c)
+	}
+	// The built-ins keep priority, and the default library is untouched.
+	if c := lib.Classify("listen tcp :8080: bind: address already in use"); c.PatternID != "P001-port-in-use" {
+		t.Fatalf("built-in lost: %+v", c)
+	}
+	if got := len(lib.Patterns()); got != len(Patterns())+1 {
+		t.Fatalf("library has %d, default %d", got, len(Patterns()))
+	}
+	if Classify("boom db:5432").PatternID != "" {
+		t.Fatal("the custom pattern leaked into the default library")
+	}
+	// A nil *Library is the default one.
+	var none *Library
+	if none.Classify("panic: x").PatternID != "P009-go-panic" || len(none.Patterns()) != len(Patterns()) {
+		t.Fatal("nil library should behave as the default")
+	}
+	// With is chainable and each step is immutable.
+	q := sample("U002-other", `other`)
+	q.Match = []string{"other thing"}
+	q.NoMatch = []string{"fine"}
+	lib2, err := lib.With(q)
+	if err != nil || len(lib2.Patterns()) != len(lib.Patterns())+1 {
+		t.Fatalf("chaining: %v", err)
+	}
+}
+
+func TestLibraryWithRejectsShadowedAndInvalidPatterns(t *testing.T) {
+	// A custom pattern whose example a built-in already claims would never run.
+	p := sample("U003-shadowed", `address already in use`)
+	p.Match = []string{"listen tcp :8080: bind: address already in use"}
+	if _, err := DefaultLibrary().With(p); err == nil || !strings.Contains(err.Error(), "already recognized by P001-port-in-use") {
+		t.Fatalf("shadowed: %v", err)
+	}
+	// So does one shadowed by an earlier custom pattern.
+	a := sample("U004-first", `zebra`)
+	a.Match = []string{"zebra crossing"}
+	b := sample("U005-second", `crossing`)
+	b.Match = []string{"zebra crossing"}
+	b.NoMatch = []string{"road"}
+	if _, err := DefaultLibrary().With(a, b); err == nil || !strings.Contains(err.Error(), "U004-first") {
+		t.Fatalf("shadowed by custom: %v", err)
+	}
+	if _, err := DefaultLibrary().With(Pattern{ID: "bad"}); err == nil {
+		t.Fatal("invalid pattern")
+	}
+	if _, err := DefaultLibrary().With(*PatternByID("P001-port-in-use")); err == nil {
+		t.Fatal("custom pattern may not reuse a built-in ID")
+	}
+}
