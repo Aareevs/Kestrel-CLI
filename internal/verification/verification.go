@@ -181,6 +181,7 @@ type Input struct {
 // Decide turns the observations into a verdict and the reasons for it.
 func Decide(in Input) (api.Verdict, []string) {
 	var passed, failed, flaky, skipped []string
+	skippedCommand := false
 	// A running process proves little when the same service has a real
 	// probe: alive but answering 503 is not progress. Its passing liveness
 	// check then doesn't count toward a partial fix.
@@ -204,6 +205,7 @@ func Decide(in Input) (api.Verdict, []string) {
 			flaky = append(flaky, name)
 		default:
 			skipped = append(skipped, name)
+			skippedCommand = skippedCommand || c.Kind == api.CheckKindCommand
 		}
 	}
 	ran := len(passed) + len(failed) + len(flaky)
@@ -251,6 +253,15 @@ func Decide(in Input) (api.Verdict, []string) {
 			reasons = append(reasons, "no new errors from the affected services during the window")
 		} else if in.HasIncident {
 			reasons = append(reasons, "the session is not running, so recurrence of its errors could not be checked")
+		}
+		if len(skipped) > 0 {
+			// Everything that ran passed, but a check the project asked for did
+			// not run. That is not verified: the missing one may be the one that fails.
+			why := "everything that ran passed, but a configured check did not run, so this can't be called verified"
+			if skippedCommand {
+				why += " (pass --allow-exec, or answer y at the prompt, to run command checks)"
+			}
+			return api.VerdictInconclusive, append([]string{why}, reasons...)
 		}
 		return api.VerdictResolved, reasons
 	case len(passed) == 0 && len(flaky) == 0:

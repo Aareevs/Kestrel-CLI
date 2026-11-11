@@ -160,7 +160,13 @@ func TestDecide(t *testing.T) {
 		{"interrupted", Input{Checks: []api.CheckResult{pass}}, api.VerdictInconclusive, "interrupted"},
 		// Alive but failing its probe is not partial progress.
 		{"alive but probe fails", Input{Checks: []api.CheckResult{liveOK, fail}, Complete: true, Live: true}, api.VerdictStillFailing, "failing: db"},
-		{"skipped command listed", Input{Checks: []api.CheckResult{pass, skippedCmd}, Complete: true}, api.VerdictResolved, "not run: command"},
+		// A check the project asked for that did not run means "verified" can't be claimed.
+		{"skipped command blocks resolved", Input{Checks: []api.CheckResult{pass, skippedCmd}, Complete: true}, api.VerdictInconclusive, "pass --allow-exec"},
+		{"skipped command is still listed", Input{Checks: []api.CheckResult{pass, skippedCmd}, Complete: true}, api.VerdictInconclusive, "not run: command"},
+		{"skipped probe blocks resolved too", Input{Checks: []api.CheckResult{pass, check(api.CheckKindProbe, "web", api.CheckSkipped)}, Complete: true, Live: true, HasIncident: true}, api.VerdictInconclusive, "did not run"},
+		// But a failure is still a failure, with or without a skipped check.
+		{"failing beats skipped", Input{Checks: []api.CheckResult{fail, skippedCmd}, Complete: true}, api.VerdictStillFailing, "not run: command"},
+		{"partial beats skipped", Input{Checks: []api.CheckResult{pass, fail, skippedCmd}, Complete: true}, api.VerdictPartiallyResolved, "failing: db"},
 	}
 	for _, c := range cases {
 		v, why := Decide(c.in)

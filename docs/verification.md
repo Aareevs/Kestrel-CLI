@@ -56,9 +56,9 @@ problem isn't fixed, however healthy the probes look.
 When the session has ended, there is nothing new to compare, and verify says so in its notes. Verifying while
 `kestrel watch` is running gives the strongest answer.
 
-An error that repeats unchanged is recorded as one summary event at least every 10 seconds (see
+An error that repeats unchanged is recorded as a summary event at least every 2 seconds while it goes on (see
 [events](events.md)). A window shorter than that may not see it recur. Verify notes this when the window is
-shorter than 10s.
+shorter than 2s.
 
 ## Verdicts
 
@@ -67,17 +67,21 @@ shorter than 10s.
 | `resolved` | the window completed, every check that ran passed on every sample, and nothing recurred | `verified` | 0 |
 | `partially_resolved` | some checks pass, while others fail or flap, or errors keep recurring | `observed` | 1 |
 | `still_failing` | nothing that ran passed | `observed` | 1 |
-| `inconclusive` | the window was interrupted, or nothing could be checked | `unresolved` | 3 |
+| `inconclusive` | the window was interrupted, nothing could be checked, or everything that ran passed but a configured check did not run | `unresolved` | 3 |
 
 Two rules keep the verdict honest:
 
 - A passing `liveness` check doesn't count as progress for a service that also has a probe: a process that is up
   but answers 503 is still failing.
 - With a live session but nothing to probe, "no new errors" alone is `inconclusive`, not `resolved`.
+- A configured check that did not run keeps the verdict from being `resolved` (see below). In a script or CI this
+  means a `command` check needs `--allow-exec`, or the exit code is 3.
 
 Every verdict comes with its reasons (which checks passed, which failed, what was not run), and the evidence cites
-event IDs from the session. A skipped command is listed under "not run". It doesn't block `resolved`, but you can
-see that it didn't run.
+event IDs from the session. A check that did not run (a command without authorization, or one that took no samples)
+is listed under "not run", and it blocks `resolved`: if everything that ran passed but a check you configured did
+not run, the verdict is `inconclusive` rather than `verified`, since the one that didn't run may be the one that
+fails. A failure still counts as a failure either way.
 
 ## Commands
 
