@@ -151,9 +151,9 @@ we are executing it, the decisions made along the way, and the risks we are watc
 
 ## v1.1.0 (2026-11)
 
-Status: **prepared, not tagged.** Twenty-one pull requests (#11-#31), each on its own branch, labeled
+Status: **released 2026-11-12.** Twenty-one pull requests (#11-#31), each on its own branch, labeled
 `release: v1.1.0`, merged with `[skip ci]` because CI was kept off to save credits. See
-[PROGRESS.md](PROGRESS.md#v110-prepared-2026-11-12-not-tagged) for what was built, the evidence, and the limits.
+[PROGRESS.md](PROGRESS.md#v110-released-2026-11-12) for what was built, the evidence, and the limits.
 
 | # | PR | Status |
 |---|---|---|
@@ -171,8 +171,8 @@ Status: **prepared, not tagged.** Twenty-one pull requests (#11-#31), each on it
 
 Decisions:
 
-- **No tag, no release, no tap push.** Publishing stays the owner's call. The release notes are written as
-  "prepared, not released".
+- **Releasing stayed the owner's call.** The release was prepared first (notes, changelog, a local snapshot, one CI
+  run), and tagged and published only when the owner said so.
 - **CI off.** Every commit and merge subject carries `[skip ci]`; Windows was run once before tagging (GitHub Actions
   run `43172507708`: macOS, Ubuntu and Windows all passed). The first attempt failed on one test that wrongly
   expected the pinned table on Windows; it now skips there.

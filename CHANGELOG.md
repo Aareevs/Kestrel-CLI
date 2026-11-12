@@ -4,9 +4,8 @@ All notable changes to Kestrel. The format follows [Keep a Changelog](https://ke
 versions follow [Semantic Versioning](https://semver.org/). Details and evidence for each release are in
 [docs/releases/](docs/releases) and [docs/PROGRESS.md](docs/PROGRESS.md). Numbers like (#12) are pull requests.
 
-## [1.1.0] - unreleased
+## [1.1.0] - 2026-11-12
 
-Not tagged yet: the release is the owner's call (see [docs/releasing.md](docs/releasing.md)).
 [Release notes](docs/releases/v1.1.0.md).
 
 ### Changed (behavior you may notice)
