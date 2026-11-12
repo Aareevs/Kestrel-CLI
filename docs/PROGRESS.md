@@ -617,10 +617,10 @@ The GitHub Actions workflow is written but hasn't run yet: there's no remote.
 
 ---
 
-## v1.1.0 (prepared 2026-11-12, not tagged)
+## v1.1.0 (released 2026-11-12)
 
-Twenty-one pull requests (#11-#30 on GitHub; the last one is this release prep). Nothing is tagged or published: that
-is the owner's decision. Release notes: [releases/v1.1.0.md](releases/v1.1.0.md). Changelog:
+Twenty-one pull requests (#11-#31 on GitHub), then one pre-release CI run and its fixes (#32, #33). Tagged and
+published on 2026-11-12 at the owner's go-ahead. Release notes: [releases/v1.1.0.md](releases/v1.1.0.md). Changelog:
 [../CHANGELOG.md](../CHANGELOG.md).
 
 ### What was built
