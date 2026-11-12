@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -74,6 +75,9 @@ func watchTTY(t *testing.T, dir string, tty bool, args ...string) *screenTap {
 }
 
 func TestWatchPinsAStatusTableAboveTheLog(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the pinned table is off on Windows (canPin); TestWatchWithoutAPinnedTable covers what Windows does")
+	}
 	tap := watchTTY(t, watchProject(t), true, "watch")
 	rows := strings.Split(tap.atExit, "\n")
 	if len(rows) < 8 {
