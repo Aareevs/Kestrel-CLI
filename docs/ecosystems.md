@@ -44,8 +44,9 @@ matches. "Generic" advice means: read the service's startup output (`kestrel tim
   is still recorded and shown; since 1.1, when a process dies with output no pattern matched, the diagnosis quotes
   its last lines instead of saying nothing. Add your own shapes in `kestrel.yaml`: see
   [extending.md](extending.md).
-- **Windows** is built and vetted but has not been run on a Windows machine by the maintainers; several patterns
-  include Windows wording (for example `P001`, `P034`).
+- **Windows** runs the test suite in CI (macOS, Linux and Windows all passed for v1.1.0), but nobody has tried
+  Kestrel by hand on a real Windows terminal; several patterns include Windows wording (for example `P001`,
+  `P034`).
 
 ## Adding an ecosystem
 
