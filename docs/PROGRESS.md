@@ -685,7 +685,8 @@ One pre-existing flaky test (`TestVerifyCommandFailureTimeoutAndRedaction`, fail
 | `gofmt -l .` | no output |
 | `make check` (vet, test, race, build, cross-compiles) | pass |
 | `make lint` (staticcheck 2025.1.1) | pass |
-| `GOOS=windows go vet ./...` | pass (vetted, **not run**) |
+| `GOOS=windows go vet ./...` | pass |
+| CI (one run, GitHub Actions `43172507708`) | macOS, Ubuntu and Windows all pass; the first run (`43171504673`) failed on Windows only, on a test that expected the pinned table there (off by design); the test now skips on Windows |
 | `make release-check` | `.goreleaser.yaml` valid |
 | `make release-snapshot` | succeeded: darwin amd64/arm64, linux amd64/arm64, windows amd64; the darwin/arm64 binary runs (`version`, `schema`, `mcp config`) |
 | Coverage (`-short`, `-coverpkg=./internal/...,./pkg/...`) | 88.1% of statements; 303 test functions |
@@ -697,9 +698,9 @@ the weak-link anchoring; the schema currency and validation tests; the Markdown 
 
 ### Known gaps and limitations
 
-- **CI has not run on any of this** (kept off to save Actions credits). Windows is vetted and cross-compiled, never
-  run: command checks, Job Object stops, the picker's raw mode, and the (disabled-on-Windows) pinned table are
-  untested there. Run CI once before tagging.
+- **CI ran once, before tagging,** and passed on macOS, Ubuntu and Windows (run `43172507708`); it was otherwise
+  kept off to save Actions credits. Windows runs the test suite, but the pinned table is off there by design, and
+  nothing was checked by hand on a real Windows terminal (the picker's raw mode included).
 - The pinned table and picker were verified through a pty and an emulator, not by eye in Terminal.app, iTerm or
   Windows Terminal.
 - The GitHub Actions and GitLab examples in `verification.md` were run as shell under `bash -e`, not on real runners.

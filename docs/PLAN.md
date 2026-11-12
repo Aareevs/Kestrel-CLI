@@ -173,8 +173,9 @@ Decisions:
 
 - **No tag, no release, no tap push.** Publishing stays the owner's call. The release notes are written as
   "prepared, not released".
-- **CI off.** Every commit and merge subject carries `[skip ci]`; the cost is that Windows was never run. One CI run
-  is recommended before tagging.
+- **CI off.** Every commit and merge subject carries `[skip ci]`; Windows was run once before tagging (GitHub Actions
+  run `43172507708`: macOS, Ubuntu and Windows all passed). The first attempt failed on one test that wrongly
+  expected the pinned table on Windows; it now skips there.
 - **Specific over generic.** The catch-all `K004` yields to a rule that names the cause; a time-only incident link may
   not stretch an incident; process output is data in every renderer (Markdown, XML, terminal).
 - **A configured check that did not run blocks `resolved`.** A behavior change for scripts (exit 3), documented.
